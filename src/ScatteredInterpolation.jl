@@ -1,5 +1,12 @@
 module ScatteredInterpolation
 
-# package code goes here
+using Distances
 
-end # module
+export interpolate,
+    evaluate
+
+abstract type ScatteredInterpolant end
+
+include("./rbf.jl")
+
+end
