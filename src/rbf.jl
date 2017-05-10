@@ -50,7 +50,7 @@ end
 
     # Distinguish odd and even cases
     expr = if C % 2 == 0
-        :(r > 0 ? r^$C*log(r) : r)
+        :(r > 0 ? r^$C*log(r) : 0.0)
     else
         :(r^$C)
     end
