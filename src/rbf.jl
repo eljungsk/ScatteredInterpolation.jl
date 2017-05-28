@@ -62,7 +62,7 @@ struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
 
     w::Array{T,N}
     points::Array{T,2}
-    ϕ::F
+    rbf::F
     metric::M
 end
 
@@ -82,12 +82,22 @@ function interpolate(rbf::F, points::Array{T,2}, samples::Array{T,N}; metric = E
 end
 
 # Evaluate the interpolation at given locations
-function evaluate(itp::RBFInterpolant, points::Array{T, N}) where T <: Number where N
+function evaluate(itp::RBFInterpolant, points::Array{T, 2}) where T <: Number
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
-    @. A = rbf(A)
+    @. A = itp.rbf(A)
 
     # Compute the interpolated values
     return A*itp.w
+end
+
+# Fallback method for the case of just one point
+function evaluate(itp::RBFInterpolant, points::Array{T, 1}) where T <: Number
+
+    # pairwise requires the points array to be 2-d.
+    n = length(points)
+    points = reshape(points, n, 1)
+
+    evaluate(itp, points)
 end
