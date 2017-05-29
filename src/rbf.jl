@@ -14,7 +14,7 @@ for rbf in (:Gaussian, :Multiquadratic, :InverseQuadratic, :InverseMultiquadrati
         end
 
         # Define constructors
-        function $rbf(c::T) where T <: Real
+        function $rbf(c::Real)
             $rbf{c}()
         end
 
@@ -24,27 +24,85 @@ for rbf in (:Gaussian, :Multiquadratic, :InverseQuadratic, :InverseMultiquadrati
     end
 end
 
-# Add shorthand for thin plate splines
+"""
+    ThinPlate()
+
+Define a Thin Plate Radial Basis Function
+
+``
+ϕ(r) = r^2 ln(r)
+``
+
+This is a shorthand for `Polyharmonic{2}()`.
+"""
 const ThinPlate = Polyharmonic{2}
 
-# Define fuctions to return the RBF functions
-@generated function (::Gaussian{C})(r::T) where C where T <: Real
+"""
+    Gaussian(ɛ::Real)
+
+Define a Gaussian Radial Basis Function
+
+``
+ϕ(r) = e^{-(ɛr)^2}
+``
+"""
+@generated function (::Gaussian{C})(r::Real) where C
     :(exp(-($C*r)^2))
 end
 
-@generated function (::Multiquadratic{C})(r::T) where C where T <: Real
+"""
+    Multiquadratic(ɛ::Real)
+
+Define a Multiquadratic Radial Basis Function
+
+``
+ϕ(r) = \sqrt{1 + (ɛr)^2}
+``
+"""
+@generated function (::Multiquadratic{C})(r::Real) where C
     :(sqrt(1 + ($C*r)^2))
 end
 
-@generated function (::InverseQuadratic{C})(r::T) where C where T <: Real
+"""
+    InverseQuadratic(ɛ::Real)
+
+Define an Inverse Quadratic Radial Basis Function
+
+``
+ϕ(r) = \frac{1}{1 + (ɛr)^2}
+``
+"""
+@generated function (::InverseQuadratic{C})(r::Real) where C
     :(1/(1 + ($C*r)^2))
 end
 
-@generated function (::InverseMultiquadratic{C})(r::T) where C where T <: Real
+"""
+    InverseMultiquadratic(ɛ::Real)
+
+Define an Inverse Multiquadratic Radial Basis Function
+
+``
+ϕ(r) = \frac{1}{\sqrt{1 + (ɛr)^2}}
+``
+"""
+@generated function (::InverseMultiquadratic{C})(r::Real) where C
     :(1/sqrt(1 + ($C*r)^2))
 end
 
-@generated function (::Polyharmonic{C})(r::T) where C where T <: Real
+"""
+    Polyharmonic(ɛ::Real)
+
+Define a Polyharmonic Radial Basis Function
+
+``
+ϕ(r) = r^k, k = 1, 3, 5, ...
+``
+
+``
+ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
+``
+"""
+@generated function (::Polyharmonic{C})(r::Real) where C
 
     @assert typeof(C) <: Integer && C > 0
 
@@ -66,8 +124,13 @@ struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
     metric::M
 end
 
-# Create the interpolation
-function interpolate(rbf::F, points::Array{T,2}, samples::Array{T,N}; metric = Euclidean()) where F <: RadialBasisFunction where T <: Number where N
+"""
+    interpolate(rbf, points, samples [; metric]) -> RBFInterpolant
+
+Create an interpolation of the data in `samples` sampled at the locations defined in `points` based on the Radial Basis Function `rbf`.
+`metric` is any of the metrics defined by the `Distances` package.
+"""
+function interpolate(rbf::RadialBasisFunction, points::Array{T,2}, samples::Array{T,N}; metric = Euclidean()) where T <: Number where N
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
@@ -81,7 +144,11 @@ function interpolate(rbf::F, points::Array{T,2}, samples::Array{T,N}; metric = E
 
 end
 
-# Evaluate the interpolation at given locations
+"""
+    evaluate(itp, points)
+
+Evaluate an interpolation object `itp` at the locations defined in `points`.
+"""
 function evaluate(itp::RBFInterpolant, points::Array{T, 2}) where T <: Number
 
     # Compute distance matrix
