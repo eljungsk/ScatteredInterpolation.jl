@@ -158,13 +158,3 @@ function evaluate(itp::RBFInterpolant, points::Array{T, 2}) where T <: Number
     # Compute the interpolated values
     return A*itp.w
 end
-
-# Fallback method for the case of just one point
-function evaluate(itp::RBFInterpolant, points::Array{T, 1}) where T <: Number
-
-    # pairwise requires the points array to be 2-d.
-    n = length(points)
-    points = reshape(points, n, 1)
-
-    evaluate(itp, points)
-end
