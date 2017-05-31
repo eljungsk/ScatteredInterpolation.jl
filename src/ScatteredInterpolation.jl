@@ -1,6 +1,6 @@
 module ScatteredInterpolation
 
-using Distances
+using Distances, NearestNeighbors
 
 export interpolate,
     evaluate
@@ -9,6 +9,7 @@ abstract type ScatteredInterpolant end
 
 include("./rbf.jl")
 include("./idw.jl")
+include("./nearestNeighbor.jl")
 
 
 # Fallback method for the case of just one point
