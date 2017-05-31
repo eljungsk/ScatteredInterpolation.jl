@@ -8,6 +8,7 @@ export interpolate,
 abstract type ScatteredInterpolant end
 
 include("./rbf.jl")
+include("./idw.jl")
 
 
 # Fallback method for the case of just one point
