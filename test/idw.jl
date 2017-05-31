@@ -11,7 +11,7 @@ data = [0.0; 0.5; 0.5; 1.0]
 
     @testset "Evaluation" begin
 
-        itp = interpolate(r, points, data)
+        itp = interpolate(Shepard(), points, data)
 
         # Check that we get back the original data at the sample points
         ev = evaluate(itp, points)
