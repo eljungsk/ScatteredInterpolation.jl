@@ -9,12 +9,12 @@ Standard Shepard interpolation with power parameter `P`.
 Default is `P = 2`.
 
 ```math
-\begin{cases} 
-    \frac{\displaystyle \sum_{i = 1}^{N}{ w_i(\mathbf{x}) u_i } } 
-        { \displaystyle \sum_{i = 1}^{N}{ w_i(\mathbf{x}) } }, 
-         & \text{if } d(\mathbf{x},\mathbf{x}_i) \neq 0 \text{ for all } i \\ 
-    u_i, & \text{if } d(\mathbf{x},\mathbf{x}_i) = 0 \text{ for some } i
-\end{cases}
+\\begin{cases} 
+    \\frac{\\displaystyle \\sum_{i = 1}^{N}{ w_i(\\mathbf{x}) u_i } } 
+        { \\displaystyle \\sum_{i = 1}^{N}{ w_i(\\mathbf{x}) } }, 
+         & \\text{if } d(\\mathbf{x},\\mathbf{x}_i) \\neq 0 \\text{ for all } i \\\\ 
+    u_i, & \\text{if } d(\\mathbf{x},\\mathbf{x}_i) = 0 \\text{ for some } i
+\\end{cases}
 ```
 """
 struct Shepard{P} <: ShepardType end
@@ -29,7 +29,10 @@ struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 end
 
 # No need to compute anything here, everything is done in the evaluation step.
-function interpolate(idw::ShepardType, points::Array{<:Real,2}, samples::Array{<:Number,N}; metric = Euclidean()) where N
+function interpolate(idw::ShepardType,
+                     points::Array{<:Real,2},
+                     samples::Array{<:Number,N};
+                     metric = Euclidean()) where N
 
     return ShepardInterpolant(samples, points, idw, metric)
 end
@@ -47,8 +50,8 @@ function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
 
         d_col = d[:,i]
 
-        # If an interpolation point coincide with a sampling point, just return the original data
-        # Otherwise, compute distance-weighted sum
+        # If an interpolation point coincide with a sampling point, just return the 
+        # original data. Otherwise, compute distance-weighted sum
         if !all(r > 0 for r in d_col)
             ind = findfirst(x -> x ≈ 0.0, d_col)
             values[i,:] = itp.data[ind, :]
@@ -61,7 +64,10 @@ function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
 end
 
 # Original Shepard
-function evaluatePoint(::Shepard{P}, dataPoints::Array{<:Real,2}, data::Array{<:Number,N}, d::Vector) where {N, P}
+function evaluatePoint(::Shepard{P},
+                       dataPoints::Array{<:Real,2},
+                       data::Array{<:Number,N},
+                       d::Vector) where {N, P}
 
     # Compute weigths and return the weighted sum
     w = d.^P
