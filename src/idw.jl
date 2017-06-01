@@ -29,12 +29,12 @@ struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 end
 
 # No need to compute anything here, everything is done in the evaluation step.
-function interpolate(idw::ShepardType, points::Array{T,2}, samples::Array{T,N}; metric = Euclidean()) where T <: Number where N
+function interpolate(idw::ShepardType, points::Array{<:Real,2}, samples::Array{<:Number,N}; metric = Euclidean()) where N
 
     return ShepardInterpolant(samples, points, idw, metric)
 end
 
-function evaluate(itp::ShepardInterpolant, points::Array{T,2}) where T <: Real
+function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
 
     # Compute distances between sample points and interpolation points
     d = pairwise(itp.metric, itp.points, points)
@@ -61,7 +61,7 @@ function evaluate(itp::ShepardInterpolant, points::Array{T,2}) where T <: Real
 end
 
 # Original Shepard
-function evaluatePoint(::Shepard{P}, dataPoints::Array{T,2}, data::Array{T,N}, d::Vector) where T <: Number where N where P
+function evaluatePoint(::Shepard{P}, dataPoints::Array{<:Real,2}, data::Array{<:Number,N}, d::Vector) where {N, P}
 
     # Compute weigths and return the weighted sum
     w = d.^P

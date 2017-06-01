@@ -13,7 +13,7 @@ include("./nearestNeighbor.jl")
 
 
 # Fallback method for the case of just one point
-function evaluate(itp::ScatteredInterpolant, points::Array{T, 1}) where T <: Number
+function evaluate(itp::ScatteredInterpolant, points::Array{<:Real, 1})
 
     # pairwise requires the points array to be 2-d.
     n = length(points)

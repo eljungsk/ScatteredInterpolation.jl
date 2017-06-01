@@ -15,7 +15,7 @@ struct NearestNeighborInterpolant{T, TT, N} <: ScatteredInterpolant
     tree::TT
 end
 
-function interpolate(nn::NearestNeighbor, points::Array{T,2}, samples::Array{T,N}; metric = Euclidean()) where T <: Number where N
+function interpolate(nn::NearestNeighbor, points::Array{<:Real,2}, samples::Array{<:Number,N}; metric = Euclidean()) where N
 
     # Build a kd-tree of the points
     tree = KDTree(points, metric)
@@ -23,7 +23,7 @@ function interpolate(nn::NearestNeighbor, points::Array{T,2}, samples::Array{T,N
     return NearestNeighborInterpolant(samples, tree)
 end
 
-function evaluate(itp::NearestNeighborInterpolant, points::Array{T,2}) where T <: Real
+function evaluate(itp::NearestNeighborInterpolant, points::Array{<:Real,2})
 
     # Get the indices for each points closest neighbor
     inds, _ = knn(itp.tree, points, 1)

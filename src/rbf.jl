@@ -14,12 +14,8 @@ for rbf in (:Gaussian, :Multiquadratic, :InverseQuadratic, :InverseMultiquadrati
         end
 
         # Define constructors
-        function $rbf(c::Real)
+        function $rbf(c::Real = 1)
             $rbf{c}()
-        end
-
-        function $rbf()
-            $rbf{1}()
         end
     end
 end
@@ -130,7 +126,7 @@ end
 Create an interpolation of the data in `samples` sampled at the locations defined in `points` based on the Radial Basis Function `rbf`.
 `metric` is any of the metrics defined by the `Distances` package.
 """
-function interpolate(rbf::RadialBasisFunction, points::Array{T,2}, samples::Array{T,N}; metric = Euclidean()) where T <: Number where N
+function interpolate(rbf::RadialBasisFunction, points::Array{<:Real,2}, samples::Array{<:Number,N}; metric = Euclidean()) where N
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
@@ -149,7 +145,7 @@ end
 
 Evaluate an interpolation object `itp` at the locations defined in `points`.
 """
-function evaluate(itp::RBFInterpolant, points::Array{T, 2}) where T <: Number
+function evaluate(itp::RBFInterpolant, points::Array{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
