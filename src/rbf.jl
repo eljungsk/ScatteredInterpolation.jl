@@ -33,9 +33,9 @@ Define a Thin Plate Spline Radial Basis Function
 ϕ(r) = r^2 ln(r)
 ```
 
-This is a shorthand for `Polyharmonic(1)`.
+This is a shorthand for `Polyharmonic(2)`.
 """
-const ThinPlate = Polyharmonic{1}
+const ThinPlate = Polyharmonic{2}
 
 """
     Gaussian(ɛ = 1)
