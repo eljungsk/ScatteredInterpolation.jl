@@ -4,7 +4,7 @@ export NearestNeighbor
 """
     NearestNeigbor()
 
-Nearest neighbor "interpolation".
+Nearest neighbor interpolation.
 
 """
 struct NearestNeighbor end

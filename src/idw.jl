@@ -3,19 +3,9 @@ abstract type ShepardType end
 export  Shepard
 
 """
-    Shepard(P::Real)
+    Shepard(P = 2)
 
 Standard Shepard interpolation with power parameter `P`.
-Default is `P = 2`.
-
-```math
-\\begin{cases} 
-    \\frac{\\displaystyle \\sum_{i = 1}^{N}{ w_i(\\mathbf{x}) u_i } } 
-        { \\displaystyle \\sum_{i = 1}^{N}{ w_i(\\mathbf{x}) } }, 
-         & \\text{if } d(\\mathbf{x},\\mathbf{x}_i) \\neq 0 \\text{ for all } i \\\\ 
-    u_i, & \\text{if } d(\\mathbf{x},\\mathbf{x}_i) = 0 \\text{ for some } i
-\\end{cases}
-```
 """
 struct Shepard{P} <: ShepardType end
 Shepard(P::Real = 2) = Shepard{P}()

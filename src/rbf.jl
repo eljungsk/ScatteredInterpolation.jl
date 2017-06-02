@@ -27,18 +27,18 @@ end
 """
     ThinPlate()
 
-Define a Thin Plate Radial Basis Function
+Define a Thin Plate Spline Radial Basis Function
 
 ```math
 ϕ(r) = r^2 ln(r)
 ```
 
-This is a shorthand for `Polyharmonic(2)`.
+This is a shorthand for `Polyharmonic(1)`.
 """
-const ThinPlate = Polyharmonic{2}
+const ThinPlate = Polyharmonic{1}
 
 """
-    Gaussian(ɛ = 2)
+    Gaussian(ɛ = 1)
 
 Define a Gaussian Radial Basis Function
 
@@ -51,12 +51,12 @@ Define a Gaussian Radial Basis Function
 end
 
 """
-    Multiquadratic(ɛ = 2)
+    Multiquadratic(ɛ = 1)
 
 Define a Multiquadratic Radial Basis Function
 
 ```math
-ϕ(r) = \sqrt{1 + (ɛr)^2}
+ϕ(r) = \\sqrt{1 + (ɛr)^2}
 ```
 """
 @generated function (::Multiquadratic{C})(r::Real) where C
@@ -64,12 +64,12 @@ Define a Multiquadratic Radial Basis Function
 end
 
 """
-    InverseQuadratic(ɛ = 2)
+    InverseQuadratic(ɛ = 1)
 
 Define an Inverse Quadratic Radial Basis Function
 
 ```math
-ϕ(r) = \frac{1}{1 + (ɛr)^2}
+ϕ(r) = \\frac{1}{1 + (ɛr)^2}
 ```
 """
 @generated function (::InverseQuadratic{C})(r::Real) where C
@@ -77,12 +77,12 @@ Define an Inverse Quadratic Radial Basis Function
 end
 
 """
-    InverseMultiquadratic(ɛ = 2)
+    InverseMultiquadratic(ɛ = 1)
 
 Define an Inverse Multiquadratic Radial Basis Function
 
 ```math
-ϕ(r) = \frac{1}{\sqrt{1 + (ɛr)^2}}
+ϕ(r) = \\frac{1}{\\sqrt{1 + (ɛr)^2}}
 ```
 """
 @generated function (::InverseMultiquadratic{C})(r::Real) where C
@@ -90,13 +90,13 @@ Define an Inverse Multiquadratic Radial Basis Function
 end
 
 """
-    Polyharmonic(k = 2)
+    Polyharmonic(k = 1)
 
-Define a Polyharmonic Radial Basis Function
+Define a Polyharmonic Spline Radial Basis Function
 
 ```math
 ϕ(r) = r^k, k = 1, 3, 5, ...
-
+\\\\
 ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
 ```
 """
@@ -122,13 +122,6 @@ struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
     metric::M
 end
 
-"""
-    interpolate(rbf, points, samples [; metric]) -> RBFInterpolant
-
-Create an interpolation of the data in `samples` sampled at the locations defined in 
-`points` based on the Radial Basis Function `rbf`. `metric` is any of the metrics defined 
-by the `Distances` package.
-"""
 function interpolate(rbf::RadialBasisFunction,
                      points::Array{<:Real,2},
                      samples::Array{<:Number,N};
@@ -146,11 +139,6 @@ function interpolate(rbf::RadialBasisFunction,
 
 end
 
-"""
-    evaluate(itp, points)
-
-Evaluate an interpolation object `itp` at the locations defined in `points`.
-"""
 function evaluate(itp::RBFInterpolant, points::Array{<:Real, 2})
 
     # Compute distance matrix
