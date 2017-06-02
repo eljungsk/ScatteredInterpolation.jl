@@ -9,3 +9,10 @@ makedocs(
         "API" => "api.md",
     ]
 )
+
+deploydocs(
+    repo = "github.com/eljungsk/ScatteredInterpolation.jl.git",
+    target = "build",
+    deps = nothing,
+    make = nothing,
+)
