@@ -1,11 +1,13 @@
 module ScatteredInterpolation
 
-using Distances, NearestNeighbors
+using Distances, 
+    NearestNeighbors,
+    Compat
 
 export interpolate,
     evaluate
 
-abstract type ScatteredInterpolant end
+@compat abstract type ScatteredInterpolant end
 
 include("./rbf.jl")
 include("./idw.jl")
@@ -13,7 +15,7 @@ include("./nearestNeighbor.jl")
 
 
 # Fallback method for the case of just one point
-function evaluate(itp::ScatteredInterpolant, points::Array{<:Real, 1})
+@compat function evaluate(itp::ScatteredInterpolant, points::Array{<:Real, 1})
 
     # pairwise requires the points array to be 2-d.
     n = length(points)

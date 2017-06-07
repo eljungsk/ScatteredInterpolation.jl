@@ -1,3 +1,4 @@
-julia 0.6-
+julia 0.5
+Compat 0.21.0
 Distances
 NearestNeighbors

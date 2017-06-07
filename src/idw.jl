@@ -1,4 +1,4 @@
-abstract type ShepardType end
+@compat abstract type ShepardType end
 
 export  Shepard
 
@@ -7,10 +7,10 @@ export  Shepard
 
 Standard Shepard interpolation with power parameter `P`.
 """
-struct Shepard{P} <: ShepardType end
+immutable Shepard{P} <: ShepardType end
 Shepard(P::Real = 2) = Shepard{P}()
 
-struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
+immutable ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 
     data::Array{T1,N}
     points::Array{T2,2}
@@ -19,15 +19,15 @@ struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 end
 
 # No need to compute anything here, everything is done in the evaluation step.
-function interpolate(idw::ShepardType,
+@compat function interpolate{N}(idw::ShepardType,
                      points::Array{<:Real,2},
                      samples::Array{<:Number,N};
-                     metric = Euclidean()) where N
+                     metric = Euclidean())
 
     return ShepardInterpolant(samples, points, idw, metric)
 end
 
-function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
+@compat function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
 
     # Compute distances between sample points and interpolation points
     d = pairwise(itp.metric, itp.points, points)
@@ -54,10 +54,10 @@ function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
 end
 
 # Original Shepard
-function evaluatePoint(::Shepard{P},
+@compat function evaluatePoint{N, P}(::Shepard{P},
                        dataPoints::Array{<:Real,2},
                        data::Array{<:Number,N},
-                       d::Vector) where {N, P}
+                       d::Vector)
 
     # Compute weigths and return the weighted sum
     w = d.^P

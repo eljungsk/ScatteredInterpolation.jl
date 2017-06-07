@@ -13,15 +13,15 @@ radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(
 
     @testset "Evaluation" for r in radialBasisFunctions
 
-        f(x) = if r isa Gaussian
+        f(x) = if isa(r, Gaussian)
             exp(-(2*x)^2)
-        elseif r isa Multiquadratic
+        elseif isa(r, Multiquadratic)
             sqrt(1 + (2x)^2)
-        elseif r isa InverseQuadratic
+        elseif isa(r, InverseQuadratic)
             1/(1 + (2x)^2)
-        elseif r isa InverseMultiquadratic
+        elseif isa(r, InverseMultiquadratic)
             1/sqrt(1 + (2x)^2)
-        elseif r isa Polyharmonic
+        elseif isa(r, Polyharmonic)
             x > 0.0 ? x^2*log(x) : 0.0
         end
 
