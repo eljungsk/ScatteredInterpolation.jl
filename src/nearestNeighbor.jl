@@ -7,7 +7,7 @@ export NearestNeighbor
 Nearest neighbor interpolation.
 
 """
-immutable NearestNeighbor end
+immutable NearestNeighbor <: InterpolationMethod end
 
 immutable NearestNeighborInterpolant{T, TT, N} <: ScatteredInterpolant
 

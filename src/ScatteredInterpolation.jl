@@ -8,6 +8,7 @@ export interpolate,
     evaluate
 
 @compat abstract type ScatteredInterpolant end
+@compat abstract type InterpolationMethod end
 
 include("./rbf.jl")
 include("./idw.jl")

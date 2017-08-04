@@ -1,4 +1,4 @@
-@compat abstract type ShepardType end
+@compat abstract type ShepardType <: InterpolationMethod end
 
 export  Shepard
 

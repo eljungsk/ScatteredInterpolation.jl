@@ -1,4 +1,4 @@
-@compat abstract type RadialBasisFunction end
+@compat abstract type RadialBasisFunction <: InterpolationMethod end
 
 export  Gaussian,
         Multiquadratic,
