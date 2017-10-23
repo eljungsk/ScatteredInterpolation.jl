@@ -2,4 +2,7 @@
 *.jl.*.cov
 *.jl.mem
 
+*.so
+
 docs/build
+deps/qhull
