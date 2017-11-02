@@ -1,4 +1,5 @@
-pkg_dir = Pkg.Dir.path() * "/ScatteredInterpolation/deps/qhull/"
+deps_dir = Pkg.Dir.path() * "/ScatteredInterpolation/deps/"
+pkg_dir = deps_dir * "qhull/"
 
 install_dir = pkg_dir
 src_dir = pkg_dir * "src"
@@ -17,3 +18,7 @@ run(`rm $filename`)
 cd(src_dir * "/" * version)
 run(`make`)
 run(`make DESTDIR=$install_dir install`)
+
+# Compile the wrapper
+cd(deps_dir)
+run(`gcc  -fPIC -shared wrapqhull.c qhull/lib/libqhullstatic_r.a -o libwrapqhull.so`)

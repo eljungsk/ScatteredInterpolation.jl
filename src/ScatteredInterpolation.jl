@@ -12,6 +12,7 @@ export interpolate,
 include("./rbf.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
+include("./qhull/qhull.jl")
 
 
 # Fallback method for the case of just one point

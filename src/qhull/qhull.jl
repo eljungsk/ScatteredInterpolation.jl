@@ -12,6 +12,8 @@ struct Mesh{N, T <: Real, S <: Integer}
     points::Matrix{T}
 end
 
+const libwrapqhull = joinpath(dirname(@__FILE__), "..", "..", "deps", "libwrapqhull")
+
 """
     delaunay(points::Matrix{<:Real}) -> Mesh
 
@@ -32,7 +34,7 @@ function delaunay(points::Matrix{<:Real})
     nDims, nPoints = size(points)
 
     # Call qhull to construct the Delaunay triangulation
-    ccall((:delaunay, "../../deps/libwrapqhull"),
+    ccall((:delaunay, libwrapqhull),
           Void,
           (Ptr{Ptr{Cint}}, 
            Ptr{Ptr{Cint}}, 
@@ -82,4 +84,49 @@ function delaunay(points::Matrix{<:Real})
     end
 
     Mesh(facets, points)
+end
+
+"""
+    delaunay_matlab(points::Matrix{<:Real}) -> Matrix{Int}
+
+Compute the Delaunay triangulation of a set of points and return a MATLAB-like array of
+indices.
+
+`points` should be an `m`x`n` matrix, where `m` is the number of dimensions and `n` the
+number of points, i.e. each column of `points` define one point.
+"""
+function delaunay_matlab(points::Matrix{<:Real})
+
+    # Setup for a ccall
+    intPtr = Array{Ptr{Cint}}
+    vertexList_c = intPtr(1)
+    facetList_c = intPtr(1)
+    neighborList_c = intPtr(1)
+    nFacets_c = Array{Cint}(1)
+
+    nDims, nPoints = size(points)
+
+    # Call qhull to construct the Delaunay triangulation
+    ccall((:delaunay, libwrapqhull),
+          Void,
+          (Ptr{Ptr{Cint}}, 
+           Ptr{Ptr{Cint}}, 
+           Ptr{Ptr{Cint}}, 
+           Ptr{Cint}, 
+           Ptr{Cdouble}, 
+           Cint, 
+           Cint), 
+          vertexList_c, 
+          neighborList_c, 
+          facetList_c, 
+          nFacets_c,
+          points,
+          nDims,
+          nPoints)
+
+    # Return the vertex list
+    nFacets = Int(nFacets_c[1])
+    vertexList = unsafe_wrap(Array, vertexList_c[1], (nDims+1, nFacets), false)
+
+    return deepcopy(vertexList)
 end
