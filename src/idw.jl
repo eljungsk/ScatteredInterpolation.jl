@@ -20,14 +20,14 @@ end
 
 # No need to compute anything here, everything is done in the evaluation step.
 @compat function interpolate{N}(idw::ShepardType,
-                     points::Array{<:Real,2},
-                     samples::Array{<:Number,N};
+                     points::AbstractArray{<:Real,2},
+                     samples::AbstractArray{<:Number,N};
                      metric = Euclidean())
 
     return ShepardInterpolant(samples, points, idw, metric)
 end
 
-@compat function evaluate(itp::ShepardInterpolant, points::Array{<:Real,2})
+@compat function evaluate(itp::ShepardInterpolant, points::AbstractArray{<:Real,2})
 
     # Compute distances between sample points and interpolation points
     d = pairwise(itp.metric, itp.points, points)
@@ -35,7 +35,7 @@ end
     # Evaluate point by point
     m = size(points, 2)
     n = size(itp.data, 2)
-    values = zeros(m, n)
+    values = zeros(eltype(itp.data), m, n)
     for i = 1:m
 
         d_col = d[:,i]
@@ -55,9 +55,9 @@ end
 
 # Original Shepard
 @compat function evaluatePoint{N, P}(::Shepard{P},
-                       dataPoints::Array{<:Real,2},
-                       data::Array{<:Number,N},
-                       d::Vector)
+                       dataPoints::AbstractArray{<:Real,2},
+                       data::AbstractArray{<:Number,N},
+                       d::AbstractVector)
 
     # Compute weigths and return the weighted sum
     w = d.^P

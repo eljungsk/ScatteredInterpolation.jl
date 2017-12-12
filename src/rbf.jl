@@ -123,8 +123,8 @@ immutable RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
 end
 
 @compat function interpolate{N}(rbf::RadialBasisFunction,
-                     points::Array{<:Real,2},
-                     samples::Array{<:Number,N};
+                     points::AbstractArray{<:Real,2},
+                     samples::AbstractArray{<:Number,N};
                      metric = Euclidean())
 
     # Compute pairwise distances and apply the Radial Basis Function
@@ -139,7 +139,7 @@ end
 
 end
 
-@compat function evaluate(itp::RBFInterpolant, points::Array{<:Real, 2})
+@compat function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
