@@ -21,7 +21,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Example Usage",
     "category": "section",
-    "text": "using ScatteredInterpolationInterpolate data defined on the vertices and in the center of a square using a multiquadratic radial basis function:samples = [0.0; 0.5; 0.5; 0.5; 1.0];\npoints = [0.0 0.0; 0.0 1.0; 1.0 0.0; 0.5 0.5; 1.0 1.0]';\nitp = interpolate(Multiquadratic(), points, samples)\ninterpolated = evaluate(itp, [0.6; 0.6])If we instead want to use nearest neighbor interpolation, we can runitp = interpolate(NearestNeighbor(), points, samples)\ninterpolated = evaluate(itp, [0.6; 0.6])"
+    "text": "using ScatteredInterpolationInterpolate data defined on the vertices and in the center of a square using a multiquadratic radial basis function:samples = [0.0; 0.5; 0.5; 0.5; 1.0];\npoints = [0.0 0.0; 0.0 1.0; 1.0 0.0; 0.5 0.5; 1.0 1.0]\';\nitp = interpolate(Multiquadratic(), points, samples)\ninterpolated = evaluate(itp, [0.6; 0.6])If we instead want to use nearest neighbor interpolation, we can runitp = interpolate(NearestNeighbor(), points, samples)\ninterpolated = evaluate(itp, [0.6; 0.6])"
 },
 
 {
@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Gridding of data",
     "category": "section",
-    "text": "A common use case for scattered interpolation is gridding of data, i.e. interpolation of scattered data to a grid. Using the same data as above, we can interpolate it to a 5x5 gridn = 5\nx = linspace(0, 1, n)\ny = linspace(0, 1, n)\nX = repmat(x, 1, n)[:]\nY = repmat(y', n, 1)[:]\ngridPoints = [X Y]'\n\nitp = interpolate(Multiquadratic(), points, samples)\ninterpolated = evaluate(itp, gridPoints)\ngridded = reshape(interpolated, n, n)"
+    "text": "A common use case for scattered interpolation is gridding of data, i.e. interpolation of scattered data to a grid. Using the same data as above, we can interpolate it to a 5x5 gridn = 5\nx = linspace(0, 1, n)\ny = linspace(0, 1, n)\nX = repmat(x, 1, n)[:]\nY = repmat(y\', n, 1)[:]\ngridPoints = [X Y]\'\n\nitp = interpolate(Multiquadratic(), points, samples)\ninterpolated = evaluate(itp, gridPoints)\ngridded = reshape(interpolated, n, n)"
 },
 
 {
@@ -61,7 +61,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Supported methods",
     "title": "Available basis functions",
     "category": "section",
-    "text": "Multiquadratic\n(r) = sqrt1 + (r)^2\nInverseMultiquadratic\n(r) = frac1sqrt1 + (r)^2\nGaussian\n(r) = sqrt1 + (r)^2\nInverseQuadratic\n(r) = frac11 + (r)^2\nPolyharmonic spline\n(r) = \nbegincases\n    beginalign*\n        r^k                       k = 1 3 5  \n        r^k mathrmln(r)        k = 2 4 6 \n    endalign*\nendcases\nThinPlate spline\nA thin plate spline is the special case k = 2 of the polyharmonic splines. ThinPlate() is a shorthand for Polyharmonic(2)."
+    "text": "Multiquadratic\n(r) = sqrt1 + (r)^2\nInverseMultiquadratic\n(r) = frac1sqrt1 + (r)^2\nGaussian\n(r) = e^-(r)^2\nInverseQuadratic\n(r) = frac11 + (r)^2\nPolyharmonic spline\n(r) = \nbegincases\n    beginalign*\n        r^k                       k = 1 3 5  \n        r^k mathrmln(r)        k = 2 4 6 \n    endalign*\nendcases\nThinPlate spline\nA thin plate spline is the special case k = 2 of the polyharmonic splines. ThinPlate() is a shorthand for Polyharmonic(2)."
 },
 
 {
@@ -100,7 +100,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.interpolate",
     "page": "API",
     "title": "ScatteredInterpolation.interpolate",
-    "category": "Function",
+    "category": "function",
     "text": "interpolate(method, points, samples[; metric])\n\nCreate an interpolation of the data in samples sampled at the locations defined in  points based on the interpolation method method. metric is any of the metrics defined  by the Distances package.\n\npoints should be an nk matrix, where n is dimension of the sampled space and  k is the number of points. This means that each column in the matrix defines one point.\n\nsamples is an km array, where k is the number of sampled points (same as for points) and m is the dimension of the sampled data.\n\nThe returned ScatteredInterpolant object can be passed to evaluate to interpolate the data to new points.\n\n\n\n"
 },
 
@@ -108,7 +108,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.evaluate",
     "page": "API",
     "title": "ScatteredInterpolation.evaluate",
-    "category": "Function",
+    "category": "function",
     "text": "evaluate(itp, points)\n\nEvaluate an interpolation object itp at the locations defined in points.\n\npoints should be an nk matrix, where n is dimension of the sampled space and  k is the number of points. This means that each column in the matrix defines one point.\n\n\n\n"
 },
 
@@ -132,7 +132,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.Multiquadratic",
     "page": "API",
     "title": "ScatteredInterpolation.Multiquadratic",
-    "category": "Type",
+    "category": "type",
     "text": "Multiquadratic(ɛ = 1)\n\nDefine a Multiquadratic Radial Basis Function\n\n(r) = sqrt1 + (r)^2\n\n\n\n"
 },
 
@@ -140,7 +140,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.InverseMultiquadratic",
     "page": "API",
     "title": "ScatteredInterpolation.InverseMultiquadratic",
-    "category": "Type",
+    "category": "type",
     "text": "InverseMultiquadratic(ɛ = 1)\n\nDefine an Inverse Multiquadratic Radial Basis Function\n\n(r) = frac1sqrt1 + (r)^2\n\n\n\n"
 },
 
@@ -148,7 +148,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.Gaussian",
     "page": "API",
     "title": "ScatteredInterpolation.Gaussian",
-    "category": "Type",
+    "category": "type",
     "text": "Gaussian(ɛ = 1)\n\nDefine a Gaussian Radial Basis Function\n\n(r) = e^-(r)^2\n\n\n\n"
 },
 
@@ -156,7 +156,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.InverseQuadratic",
     "page": "API",
     "title": "ScatteredInterpolation.InverseQuadratic",
-    "category": "Type",
+    "category": "type",
     "text": "InverseQuadratic(ɛ = 1)\n\nDefine an Inverse Quadratic Radial Basis Function\n\n(r) = frac11 + (r)^2\n\n\n\n"
 },
 
@@ -164,7 +164,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.Polyharmonic",
     "page": "API",
     "title": "ScatteredInterpolation.Polyharmonic",
-    "category": "Type",
+    "category": "type",
     "text": "Polyharmonic(k = 1)\n\nDefine a Polyharmonic Spline Radial Basis Function\n\n(r) = r^k k = 1 3 5 \n\n(r) = r^k ln(r) k = 2 4 6 \n\n\n\n"
 },
 
@@ -172,7 +172,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.ThinPlate",
     "page": "API",
     "title": "ScatteredInterpolation.ThinPlate",
-    "category": "Type",
+    "category": "type",
     "text": "ThinPlate()\n\nDefine a Thin Plate Spline Radial Basis Function\n\n(r) = r^2 ln(r)\n\nThis is a shorthand for Polyharmonic(2).\n\n\n\n"
 },
 
@@ -188,7 +188,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.Shepard",
     "page": "API",
     "title": "ScatteredInterpolation.Shepard",
-    "category": "Type",
+    "category": "type",
     "text": "Shepard(P = 2)\n\nStandard Shepard interpolation with power parameter P.\n\n\n\n"
 },
 
@@ -204,7 +204,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.NearestNeighbor",
     "page": "API",
     "title": "ScatteredInterpolation.NearestNeighbor",
-    "category": "Type",
+    "category": "type",
     "text": "NearestNeigbor()\n\nNearest neighbor interpolation.\n\n\n\n"
 },
 
