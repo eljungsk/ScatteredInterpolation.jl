@@ -32,7 +32,7 @@ To use radial basis function interpolation, pass one of the available basis func
   * [`Gaussian`](@ref)
 
     ```math
-    ϕ(r) = \sqrt{1 + (ɛr)^2}
+    ϕ(r) = e^{-(ɛr)^2}
     ```
 
   * [`InverseQuadratic`](@ref)
