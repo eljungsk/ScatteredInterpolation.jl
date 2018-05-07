@@ -125,7 +125,7 @@ end
 @compat function interpolate{N}(rbf::RadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean())
+                     metric = Euclidean(), returnRBFmatrix = false)
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
@@ -135,7 +135,13 @@ end
     w = A\samples
 
     # Create and return an interpolation object
-    return RBFInterpolant(w, points, rbf, metric)
+    if returnRBFmatrix == true    # Return matrix A
+        return RBFInterpolant(w, points, rbf, metric), A
+    elseif returnRBFmatrix == false
+        return RBFInterpolant(w, points, rbf, metric)
+    else
+        error("set returnRBFmatrix to true or false")
+    end
 
 end
 
