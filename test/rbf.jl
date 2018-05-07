@@ -6,7 +6,7 @@ data = [0.0; 0.5; 0.5; 1.0]
 radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(), InverseMultiquadratic{2}(), Polyharmonic{2}(), ThinPlate())
 
 @testset "RBF" begin
-    
+
     @testset "Constructors" for rbf in (:Gaussian, :Multiquadratic, :InverseQuadratic, :InverseMultiquadratic, :Polyharmonic)
         @eval @test $rbf(1) == $rbf{1}() == $rbf()
     end
@@ -33,4 +33,11 @@ radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(
         ev = evaluate(itp, points)
         @test ev ≈ data
     end
+
+    @testset "returnRBFmatrix" begin
+        r = radialBasisFunctions[1]
+        @test typeof(interpolate(r, points, data; returnRBFmatrix = true)) <: Tuple
+        @test_throws TypeError interpolate(r, points, data; returnRBFmatrix = "true")
+    end
+
 end
