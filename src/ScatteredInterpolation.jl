@@ -31,7 +31,8 @@ end
 Create an interpolation of the data in `samples` sampled at the locations defined in
 `points` based on the interpolation method `method`. `metric` is any of the metrics defined
 by the `Distances` package. The RBF matrix used for solving the weights can be returned with
-the boolean `returnRBFmatrix`.
+the boolean `returnRBFmatrix`. Note that this option is only valid for RadialBasisFunction
+interpolations.
 
 `points` should be an ``n×k`` matrix, where ``n`` is dimension of the sampled space and
 ``k`` is the number of points. This means that each column in the matrix defines one point.
