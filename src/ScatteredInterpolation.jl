@@ -1,6 +1,6 @@
 module ScatteredInterpolation
 
-using Distances, 
+using Distances,
     NearestNeighbors,
     Compat
 
@@ -26,13 +26,15 @@ include("./nearestNeighbor.jl")
 end
 
 """
-    interpolate(method, points, samples[; metric])
+    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false)
 
-Create an interpolation of the data in `samples` sampled at the locations defined in 
-`points` based on the interpolation method `method`. `metric` is any of the metrics defined 
-by the `Distances` package.
+Create an interpolation of the data in `samples` sampled at the locations defined in
+`points` based on the interpolation method `method`. `metric` is any of the metrics defined
+by the `Distances` package. The RBF matrix used for solving the weights can be returned with
+the boolean `returnRBFmatrix`. Note that this option is only valid for RadialBasisFunction
+interpolations.
 
-`points` should be an ``n×k`` matrix, where ``n`` is dimension of the sampled space and 
+`points` should be an ``n×k`` matrix, where ``n`` is dimension of the sampled space and
 ``k`` is the number of points. This means that each column in the matrix defines one point.
 
 `samples` is an ``k×m`` array, where ``k`` is the number of sampled points (same as for
@@ -49,7 +51,7 @@ function interpolate end
 
 Evaluate an interpolation object `itp` at the locations defined in `points`.
 
-`points` should be an ``n×k`` matrix, where ``n`` is dimension of the sampled space and 
+`points` should be an ``n×k`` matrix, where ``n`` is dimension of the sampled space and
 ``k`` is the number of points. This means that each column in the matrix defines one point.
 """
 function evaluate end
