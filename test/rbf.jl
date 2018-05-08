@@ -37,7 +37,7 @@ radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(
     @testset "returnRBFmatrix" begin
         r = radialBasisFunctions[1]
         @test typeof(interpolate(r, points, data; returnRBFmatrix = true)) <: Tuple
-        @test_throws ErrorException interpolate(r, points, data; returnRBFmatrix = "true")
+        @test_throws TypeError interpolate(r, points, data; returnRBFmatrix = "true")
     end
 
 end
