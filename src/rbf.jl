@@ -137,7 +137,7 @@ end
     # Create and return an interpolation object
     if returnRBFmatrix    # Return matrix A
         return RBFInterpolant(w, points, rbf, metric), A
-    else returnRBFmatrix
+    else
         return RBFInterpolant(w, points, rbf, metric)
     end
 
