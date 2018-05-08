@@ -101,7 +101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "API",
     "title": "ScatteredInterpolation.interpolate",
     "category": "function",
-    "text": "interpolate(method, points, samples[; metric])\n\nCreate an interpolation of the data in samples sampled at the locations defined in  points based on the interpolation method method. metric is any of the metrics defined  by the Distances package.\n\npoints should be an nk matrix, where n is dimension of the sampled space and  k is the number of points. This means that each column in the matrix defines one point.\n\nsamples is an km array, where k is the number of sampled points (same as for points) and m is the dimension of the sampled data.\n\nThe returned ScatteredInterpolant object can be passed to evaluate to interpolate the data to new points.\n\n\n\n"
+    "text": "interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false)\n\nCreate an interpolation of the data in samples sampled at the locations defined in points based on the interpolation method method. metric is any of the metrics defined by the Distances package. The RBF matrix used for solving the weights can be returned with the boolean returnRBFmatrix. Note that this option is only valid for RadialBasisFunction interpolations.\n\npoints should be an nk matrix, where n is dimension of the sampled space and k is the number of points. This means that each column in the matrix defines one point.\n\nsamples is an km array, where k is the number of sampled points (same as for points) and m is the dimension of the sampled data.\n\nThe returned ScatteredInterpolant object can be passed to evaluate to interpolate the data to new points.\n\n\n\n"
 },
 
 {
@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "API",
     "title": "ScatteredInterpolation.evaluate",
     "category": "function",
-    "text": "evaluate(itp, points)\n\nEvaluate an interpolation object itp at the locations defined in points.\n\npoints should be an nk matrix, where n is dimension of the sampled space and  k is the number of points. This means that each column in the matrix defines one point.\n\n\n\n"
+    "text": "evaluate(itp, points)\n\nEvaluate an interpolation object itp at the locations defined in points.\n\npoints should be an nk matrix, where n is dimension of the sampled space and k is the number of points. This means that each column in the matrix defines one point.\n\n\n\n"
 },
 
 {
