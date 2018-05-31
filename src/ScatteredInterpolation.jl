@@ -40,6 +40,10 @@ interpolations.
 `samples` is an ``k×m`` array, where ``k`` is the number of sampled points (same as for
 `points`) and ``m`` is the dimension of the sampled data.
 
+The RadialBasisFunction interpolation supports the use of unique RBF functions and widths
+for each sampled point by supplying `method` with a vector of interpolation methods
+of length ``k``.
+
 The returned `ScatteredInterpolant` object can be passed to `evaluate` to interpolate the
 data to new points.
 """

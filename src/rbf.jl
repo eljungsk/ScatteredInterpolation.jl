@@ -143,11 +143,50 @@ end
 
 end
 
+@compat function interpolate{N}(rbfs::Vector{T} where T<: ScatteredInterpolation.RadialBasisFunction,
+                     points::AbstractArray{<:Real,2},
+                     samples::AbstractArray{<:Number,N};
+                     metric = Euclidean(), returnRBFmatrix::Bool = false)
+
+    # Compute pairwise distances and apply the Radial Basis Function
+    A = pairwise(metric, points)
+
+    n = size(points,2)
+    for (j, rbf) in enumerate(rbfs)
+        for i = 1:n
+            A[i,j] = rbf(A[i,j])
+        end
+    end
+
+    # Solve for the weights
+    w = A\samples
+
+    # Create and return an interpolation object
+    if returnRBFmatrix    # Return matrix A
+        return RBFInterpolant(w, points, rbfs, metric), A
+    else
+        return RBFInterpolant(w, points, rbfs, metric)
+    end
+
+end
+
 @compat function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
     @dotcompat A = itp.rbf(A)
+
+    # Compute the interpolated values
+    return A*itp.w
+end
+
+@compat function evaluate(itp::RBFInterpolant{S,T,U,V}, points::AbstractArray{<:Real, 2}) where {S <: Vector, T, U, V}
+
+    # Compute distance matrix
+    A = pairwise(itp.metric, points, itp.points)
+    for (j, rbf) in enumerate(itp.rbf)
+        @. A[:,j] = rbf(A[:,j])
+    end
 
     # Compute the interpolated values
     return A*itp.w

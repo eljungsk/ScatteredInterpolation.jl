@@ -34,6 +34,26 @@ radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(
         @test ev ≈ data
     end
 
+    @testset "Mixed RBF Evaluation" begin
+
+        RBFs = [Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(), InverseMultiquadratic{2}()]
+        itp = interpolate(RBFs, points, data)
+
+        # Check that we get back the original data at the sample points
+        ev = evaluate(itp, points)
+        @test ev ≈ data
+
+        @testset "Mixed RBF method equality" begin
+
+            itpConstant = interpolate(Gaussian(), points, data)
+            itpMixed = interpolate(repmat([Gaussian()],size(points,2)), points, data)
+
+            # Check that the result is the same when dispatching on multiple,
+            # but equal RBFs for each interpolation point
+            @test evaluate(itpConstant, points) == evaluate(itpMixed, points)
+        end
+    end
+
     @testset "returnRBFmatrix" begin
         r = radialBasisFunctions[1]
         @test typeof(interpolate(r, points, data; returnRBFmatrix = true)) <: Tuple
