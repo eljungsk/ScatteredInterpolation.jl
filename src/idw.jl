@@ -7,10 +7,12 @@ export  Shepard
 
 Standard Shepard interpolation with power parameter `P`.
 """
-immutable Shepard{P} <: ShepardType end
-Shepard(P::Real = 2) = Shepard{P}()
+struct Shepard{T} <: ShepardType where T <: Real
+    P::T
+end
+Shepard() = Shepard(2)
 
-immutable ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
+struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 
     data::Array{T1,N}
     points::Array{T2,2}
@@ -19,10 +21,10 @@ immutable ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 end
 
 # No need to compute anything here, everything is done in the evaluation step.
-@compat function interpolate{N}(idw::ShepardType,
+@compat function interpolate(idw::ShepardType,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean())
+                     metric = Euclidean()) where {N}
 
     return ShepardInterpolant(samples, points, idw, metric)
 end
@@ -54,12 +56,12 @@ end
 end
 
 # Original Shepard
-@compat function evaluatePoint{N, P}(::Shepard{P},
+@compat function evaluatePoint(idw::Shepard,
                        dataPoints::AbstractArray{<:Real,2},
                        data::AbstractArray{<:Number,N},
-                       d::AbstractVector)
+                       d::AbstractVector) where {N}
 
     # Compute weigths and return the weighted sum
-    w = d.^P
+    w = d.^idw.P
     value = sum(w.*data, 1)./sum(w)
 end

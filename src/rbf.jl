@@ -14,30 +14,16 @@ for rbf in (:Gaussian,
             :InverseMultiquadratic,
             :Polyharmonic)
     @eval begin
-        immutable $rbf{T} <: RadialBasisFunction
+        struct $rbf{T} <: RadialBasisFunction where T <: Real
+            ɛ::T    
         end
 
-        # Define constructors
-        function $rbf(c::Real = 1)
-            $rbf{c}()
-        end
+        # Define default constructors
+        $rbf() = $rbf(1)
     end
 end
 
-"""
-    ThinPlate()
-
-Define a Thin Plate Spline Radial Basis Function
-
-```math
-ϕ(r) = r^2 ln(r)
-```
-
-This is a shorthand for `Polyharmonic(2)`.
-"""
-const ThinPlate = Polyharmonic{2}
-
-"""
+@doc "
     Gaussian(ɛ = 1)
 
 Define a Gaussian Radial Basis Function
@@ -45,12 +31,10 @@ Define a Gaussian Radial Basis Function
 ```math
 ϕ(r) = e^{-(ɛr)^2}
 ```
-"""
-@generated function (::Gaussian{C}){C}(r::Real)
-    :(exp(-($C*r)^2))
-end
+" Gaussian
+(rbf::Gaussian)(r) = exp(-(rbf.ɛ*r)^2) 
 
-"""
+@doc "
     Multiquadratic(ɛ = 1)
 
 Define a Multiquadratic Radial Basis Function
@@ -58,12 +42,10 @@ Define a Multiquadratic Radial Basis Function
 ```math
 ϕ(r) = \\sqrt{1 + (ɛr)^2}
 ```
-"""
-@generated function (::Multiquadratic{C}){C}(r::Real)
-    :(sqrt(1 + ($C*r)^2))
-end
+" Multiquadratic
+(rbf::Multiquadratic)(r) = (sqrt(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     InverseQuadratic(ɛ = 1)
 
 Define an Inverse Quadratic Radial Basis Function
@@ -71,12 +53,10 @@ Define an Inverse Quadratic Radial Basis Function
 ```math
 ϕ(r) = \\frac{1}{1 + (ɛr)^2}
 ```
-"""
-@generated function (::InverseQuadratic{C}){C}(r::Real)
-    :(1/(1 + ($C*r)^2))
-end
+" InverseQuadratic
+(rbf::InverseQuadratic)(r) = (1/(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     InverseMultiquadratic(ɛ = 1)
 
 Define an Inverse Multiquadratic Radial Basis Function
@@ -84,12 +64,10 @@ Define an Inverse Multiquadratic Radial Basis Function
 ```math
 ϕ(r) = \\frac{1}{\\sqrt{1 + (ɛr)^2}}
 ```
-"""
-@generated function (::InverseMultiquadratic{C}){C}(r::Real)
-    :(1/sqrt(1 + ($C*r)^2))
-end
+" InverseMultiquadratic
+(rbf::InverseMultiquadratic)(r) = (1/sqrt(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     Polyharmonic(k = 1)
 
 Define a Polyharmonic Spline Radial Basis Function
@@ -99,22 +77,35 @@ Define a Polyharmonic Spline Radial Basis Function
 \\\\
 ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
 ```
-"""
-@generated function (::Polyharmonic{C}){C}(r::Real)
-
-    @assert typeof(C) <: Integer && C > 0
+" Polyharmonic
+function (rbf::Polyharmonic{T})(r) where T <: Integer
+    @assert rbf.ɛ > 0
 
     # Distinguish odd and even cases
-    expr = if C % 2 == 0
-        :(r > 0 ? r^$C*log(r) : 0.0)
+    expr = if rbf.ɛ % 2 == 0
+        (r > 0 ? r^rbf.ɛ*log(r) : 0.0)
     else
-        :(r^$C)
+        (r^rbf.ɛ)
     end
 
     expr
 end
 
-immutable RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
+@doc "
+    ThinPlate()
+
+Define a Thin Plate Spline Radial Basis Function
+
+```math
+ϕ(r) = r^2 ln(r)
+```
+
+This is a shorthand for `Polyharmonic(2)`.
+" ThinPlate
+ThinPlate() = Polyharmonic(2)
+
+
+struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
 
     w::Array{T,N}
     points::Array{T,2}
@@ -122,10 +113,10 @@ immutable RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
     metric::M
 end
 
-@compat function interpolate{N}(rbf::RadialBasisFunction,
+@compat function interpolate(rbf::RadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false)
+                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
@@ -143,10 +134,10 @@ end
 
 end
 
-@compat function interpolate{N}(rbfs::Vector{T} where T<: ScatteredInterpolation.RadialBasisFunction,
+@compat function interpolate(rbfs::Vector{T} where T <: ScatteredInterpolation.RadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false)
+                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)

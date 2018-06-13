@@ -3,12 +3,12 @@
 points = [0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0]'
 data = [0.0; 0.5; 0.5; 1.0]
 
-radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(), InverseMultiquadratic{2}(), Polyharmonic{2}(), ThinPlate())
+radialBasisFunctions = (Gaussian(2), Multiquadratic(2), InverseQuadratic(2), InverseMultiquadratic(2), Polyharmonic(2), ThinPlate())
 
 @testset "RBF" begin
 
     @testset "Constructors" for rbf in (:Gaussian, :Multiquadratic, :InverseQuadratic, :InverseMultiquadratic, :Polyharmonic)
-        @eval @test $rbf(1) == $rbf{1}() == $rbf()
+        @eval @test $rbf(1) == $rbf()
     end
 
     @testset "Evaluation" for r in radialBasisFunctions
@@ -36,7 +36,7 @@ radialBasisFunctions = (Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(
 
     @testset "Mixed RBF Evaluation" begin
 
-        RBFs = [Gaussian{2}(), Multiquadratic{2}(), InverseQuadratic{2}(), InverseMultiquadratic{2}()]
+        RBFs = [Gaussian(2), Multiquadratic(2), InverseQuadratic(2), InverseMultiquadratic(2)]
         itp = interpolate(RBFs, points, data)
 
         # Check that we get back the original data at the sample points

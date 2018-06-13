@@ -7,18 +7,17 @@ export NearestNeighbor
 Nearest neighbor interpolation.
 
 """
-immutable NearestNeighbor <: InterpolationMethod end
+struct NearestNeighbor <: InterpolationMethod end
 
-immutable NearestNeighborInterpolant{T, TT, N} <: ScatteredInterpolant
-
-    data::Array{T,N}
+struct NearestNeighborInterpolant{T, TT} <: ScatteredInterpolant
+    data::Array{T}
     tree::TT
 end
 
-@compat function interpolate{N}(nn::NearestNeighbor,
+@compat function interpolate(nn::NearestNeighbor,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean())
+                     metric = Euclidean()) where {N}
 
     # Build a kd-tree of the points
     tree = KDTree(points, metric)

@@ -6,7 +6,7 @@ data = [0.0; 0.5; 0.5; 1.0]
 @testset "Shepard" begin
     
     @testset "Constructors" for idw in (:Shepard, )
-        @eval @test $idw(2) == $idw{2}() == $idw()
+        @eval @test $idw(2) == $idw()
     end
 
     @testset "Evaluation" begin
