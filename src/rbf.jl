@@ -1,4 +1,4 @@
-@compat abstract type RadialBasisFunction <: InterpolationMethod end
+abstract type RadialBasisFunction <: InterpolationMethod end
 
 export  Gaussian,
         Multiquadratic,
@@ -14,7 +14,7 @@ for rbf in (:Gaussian,
             :InverseMultiquadratic,
             :Polyharmonic)
     @eval begin
-        immutable $rbf{T} <: RadialBasisFunction
+        struct $rbf{T} <: RadialBasisFunction
         end
 
         # Define constructors
@@ -46,7 +46,7 @@ Define a Gaussian Radial Basis Function
 ϕ(r) = e^{-(ɛr)^2}
 ```
 """
-@generated function (::Gaussian{C}){C}(r::Real)
+@generated function (::Gaussian{C})(r::Real) where {C}
     :(exp(-($C*r)^2))
 end
 
@@ -59,7 +59,7 @@ Define a Multiquadratic Radial Basis Function
 ϕ(r) = \\sqrt{1 + (ɛr)^2}
 ```
 """
-@generated function (::Multiquadratic{C}){C}(r::Real)
+@generated function (::Multiquadratic{C})(r::Real) where {C}
     :(sqrt(1 + ($C*r)^2))
 end
 
@@ -72,7 +72,7 @@ Define an Inverse Quadratic Radial Basis Function
 ϕ(r) = \\frac{1}{1 + (ɛr)^2}
 ```
 """
-@generated function (::InverseQuadratic{C}){C}(r::Real)
+@generated function (::InverseQuadratic{C})(r::Real) where {C}
     :(1/(1 + ($C*r)^2))
 end
 
@@ -85,7 +85,7 @@ Define an Inverse Multiquadratic Radial Basis Function
 ϕ(r) = \\frac{1}{\\sqrt{1 + (ɛr)^2}}
 ```
 """
-@generated function (::InverseMultiquadratic{C}){C}(r::Real)
+@generated function (::InverseMultiquadratic{C})(r::Real) where {C}
     :(1/sqrt(1 + ($C*r)^2))
 end
 
@@ -100,7 +100,7 @@ Define a Polyharmonic Spline Radial Basis Function
 ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
 ```
 """
-@generated function (::Polyharmonic{C}){C}(r::Real)
+@generated function (::Polyharmonic{C})(r::Real) where {C}
 
     @assert typeof(C) <: Integer && C > 0
 
@@ -114,7 +114,7 @@ Define a Polyharmonic Spline Radial Basis Function
     expr
 end
 
-immutable RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
+struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
 
     w::Array{T,N}
     points::Array{T,2}
@@ -122,10 +122,10 @@ immutable RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
     metric::M
 end
 
-@compat function interpolate{N}(rbf::RadialBasisFunction,
+function interpolate(rbf::RadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false)
+                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
@@ -143,7 +143,7 @@ end
 
 end
 
-@compat function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
+function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)

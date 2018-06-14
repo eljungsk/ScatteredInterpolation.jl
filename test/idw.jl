@@ -1,6 +1,6 @@
 
 # Define some points and data in 2D
-points = [0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0]'
+points = permutedims([0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0], (2,1))
 data = [0.0; 0.5; 0.5; 1.0]
 
 @testset "Shepard" begin
