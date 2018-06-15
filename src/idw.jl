@@ -1,4 +1,4 @@
-@compat abstract type ShepardType <: InterpolationMethod end
+abstract type ShepardType <: InterpolationMethod end
 
 export Shepard
 
@@ -7,8 +7,10 @@ export Shepard
 
 Standard Shepard interpolation with power parameter `P`.
 """
-struct Shepard{P} <: ShepardType end
-Shepard(P::Real = 2) = Shepard{P}()
+struct Shepard{T} <: ShepardType where T <: Real
+    P::T
+end
+Shepard() = Shepard(2)
 
 struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
 
@@ -54,12 +56,12 @@ function evaluate(itp::ShepardInterpolant, points::AbstractArray{<:Real,2})
 end
 
 # Original Shepard
-function evaluatePoint(::Shepard{P},
+function evaluatePoint(idw::Shepard,
                        dataPoints::AbstractArray{<:Real,2},
                        data::AbstractArray{<:Number,N},
-                       d::AbstractVector) where {N, P}
+                       d::AbstractVector) where {N}
 
     # Compute weigths and return the weighted sum
-    w = d.^P
+    w = d.^idw.P
     value = sum(w.*data, 1)./sum(w)
 end

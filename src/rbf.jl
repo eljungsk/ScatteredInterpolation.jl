@@ -14,30 +14,16 @@ for rbf in (:Gaussian,
             :InverseMultiquadratic,
             :Polyharmonic)
     @eval begin
-        struct $rbf{T} <: RadialBasisFunction
+        struct $rbf{T} <: RadialBasisFunction where T <: Real
+            ɛ::T    
         end
 
-        # Define constructors
-        function $rbf(c::Real = 1)
-            $rbf{c}()
-        end
+        # Define default constructors
+        $rbf() = $rbf(1)
     end
 end
 
-"""
-    ThinPlate()
-
-Define a Thin Plate Spline Radial Basis Function
-
-```math
-ϕ(r) = r^2 ln(r)
-```
-
-This is a shorthand for `Polyharmonic(2)`.
-"""
-const ThinPlate = Polyharmonic{2}
-
-"""
+@doc "
     Gaussian(ɛ = 1)
 
 Define a Gaussian Radial Basis Function
@@ -45,12 +31,10 @@ Define a Gaussian Radial Basis Function
 ```math
 ϕ(r) = e^{-(ɛr)^2}
 ```
-"""
-@generated function (::Gaussian{C})(r::Real) where {C}
-    :(exp(-($C*r)^2))
-end
+" Gaussian
+(rbf::Gaussian)(r) = exp(-(rbf.ɛ*r)^2) 
 
-"""
+@doc "
     Multiquadratic(ɛ = 1)
 
 Define a Multiquadratic Radial Basis Function
@@ -58,12 +42,10 @@ Define a Multiquadratic Radial Basis Function
 ```math
 ϕ(r) = \\sqrt{1 + (ɛr)^2}
 ```
-"""
-@generated function (::Multiquadratic{C})(r::Real) where {C}
-    :(sqrt(1 + ($C*r)^2))
-end
+" Multiquadratic
+(rbf::Multiquadratic)(r) = (sqrt(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     InverseQuadratic(ɛ = 1)
 
 Define an Inverse Quadratic Radial Basis Function
@@ -71,12 +53,10 @@ Define an Inverse Quadratic Radial Basis Function
 ```math
 ϕ(r) = \\frac{1}{1 + (ɛr)^2}
 ```
-"""
-@generated function (::InverseQuadratic{C})(r::Real) where {C}
-    :(1/(1 + ($C*r)^2))
-end
+" InverseQuadratic
+(rbf::InverseQuadratic)(r) = (1/(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     InverseMultiquadratic(ɛ = 1)
 
 Define an Inverse Multiquadratic Radial Basis Function
@@ -84,12 +64,10 @@ Define an Inverse Multiquadratic Radial Basis Function
 ```math
 ϕ(r) = \\frac{1}{\\sqrt{1 + (ɛr)^2}}
 ```
-"""
-@generated function (::InverseMultiquadratic{C})(r::Real) where {C}
-    :(1/sqrt(1 + ($C*r)^2))
-end
+" InverseMultiquadratic
+(rbf::InverseMultiquadratic)(r) = (1/sqrt(1 + (rbf.ɛ*r)^2))
 
-"""
+@doc "
     Polyharmonic(k = 1)
 
 Define a Polyharmonic Spline Radial Basis Function
@@ -99,20 +77,33 @@ Define a Polyharmonic Spline Radial Basis Function
 \\\\
 ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
 ```
-"""
-@generated function (::Polyharmonic{C})(r::Real) where {C}
-
-    @assert typeof(C) <: Integer && C > 0
+" Polyharmonic
+function (rbf::Polyharmonic{T})(r) where T <: Integer
+    @assert rbf.ɛ > 0
 
     # Distinguish odd and even cases
-    expr = if C % 2 == 0
-        :(r > 0 ? r^$C*log(r) : 0.0)
+    expr = if rbf.ɛ % 2 == 0
+        (r > 0 ? r^rbf.ɛ*log(r) : 0.0)
     else
-        :(r^$C)
+        (r^rbf.ɛ)
     end
 
     expr
 end
+
+@doc "
+    ThinPlate()
+
+Define a Thin Plate Spline Radial Basis Function
+
+```math
+ϕ(r) = r^2 ln(r)
+``` 
+
+This is a shorthand for `Polyharmonic(2)`.
+" ThinPlate
+ThinPlate() = Polyharmonic(2)
+
 
 struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
 
@@ -143,11 +134,50 @@ function interpolate(rbf::RadialBasisFunction,
 
 end
 
+function interpolate(rbfs::Vector{T} where T <: ScatteredInterpolation.RadialBasisFunction,
+                     points::AbstractArray{<:Real,2},
+                     samples::AbstractArray{<:Number,N};
+                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
+
+    # Compute pairwise distances and apply the Radial Basis Function
+    A = pairwise(metric, points)
+
+    n = size(points,2)
+    for (j, rbf) in enumerate(rbfs)
+        for i = 1:n
+            A[i,j] = rbf(A[i,j])
+        end
+    end
+
+    # Solve for the weights
+    w = A\samples
+
+    # Create and return an interpolation object
+    if returnRBFmatrix    # Return matrix A
+        return RBFInterpolant(w, points, rbfs, metric), A
+    else
+        return RBFInterpolant(w, points, rbfs, metric)
+    end
+
+end
+
 function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
     @dotcompat A = itp.rbf(A)
+
+    # Compute the interpolated values
+    return A*itp.w
+end
+
+function evaluate(itp::RBFInterpolant{S,T,U,V}, points::AbstractArray{<:Real, 2}) where {S <: Vector, T, U, V}
+
+    # Compute distance matrix
+    A = pairwise(itp.metric, points, itp.points)
+    for (j, rbf) in enumerate(itp.rbf)
+        @. A[:,j] = rbf(A[:,j])
+    end
 
     # Compute the interpolated values
     return A*itp.w
