@@ -1,8 +1,7 @@
 module ScatteredInterpolation
 
 using Distances,
-    NearestNeighbors,
-    Compat
+    NearestNeighbors
 
 export interpolate,
     evaluate
