@@ -120,7 +120,7 @@ function interpolate(rbf::RadialBasisFunction,
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
-    @dotcompat A = rbf(A)
+    @. A = rbf(A)
 
     # Solve for the weights
     w = A\samples
@@ -165,7 +165,7 @@ function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix
     A = pairwise(itp.metric, points, itp.points)
-    @dotcompat A = itp.rbf(A)
+    @. A = itp.rbf(A)
 
     # Compute the interpolated values
     return A*itp.w

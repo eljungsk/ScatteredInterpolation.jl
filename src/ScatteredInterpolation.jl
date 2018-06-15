@@ -6,8 +6,8 @@ using Distances,
 export interpolate,
     evaluate
 
-@compat abstract type ScatteredInterpolant end
-@compat abstract type InterpolationMethod end
+abstract type ScatteredInterpolant end
+abstract type InterpolationMethod end
 
 include("./rbf.jl")
 include("./idw.jl")
