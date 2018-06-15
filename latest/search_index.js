@@ -101,7 +101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "API",
     "title": "ScatteredInterpolation.interpolate",
     "category": "function",
-    "text": "interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false)\n\nCreate an interpolation of the data in samples sampled at the locations defined in points based on the interpolation method method. metric is any of the metrics defined by the Distances package. The RBF matrix used for solving the weights can be returned with the boolean returnRBFmatrix. Note that this option is only valid for RadialBasisFunction interpolations.\n\npoints should be an nk matrix, where n is dimension of the sampled space and k is the number of points. This means that each column in the matrix defines one point.\n\nsamples is an km array, where k is the number of sampled points (same as for points) and m is the dimension of the sampled data.\n\nThe returned ScatteredInterpolant object can be passed to evaluate to interpolate the data to new points.\n\n\n\n"
+    "text": "interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false)\n\nCreate an interpolation of the data in samples sampled at the locations defined in points based on the interpolation method method. metric is any of the metrics defined by the Distances package. The RBF matrix used for solving the weights can be returned with the boolean returnRBFmatrix. Note that this option is only valid for RadialBasisFunction interpolations.\n\npoints should be an nk matrix, where n is dimension of the sampled space and k is the number of points. This means that each column in the matrix defines one point.\n\nsamples is an km array, where k is the number of sampled points (same as for points) and m is the dimension of the sampled data.\n\nThe RadialBasisFunction interpolation supports the use of unique RBF functions and widths for each sampled point by supplying method with a vector of interpolation methods of length k.\n\nThe returned ScatteredInterpolant object can be passed to evaluate to interpolate the data to new points.\n\n\n\n"
 },
 
 {
@@ -172,7 +172,7 @@ var documenterSearchIndex = {"docs": [
     "location": "api.html#ScatteredInterpolation.ThinPlate",
     "page": "API",
     "title": "ScatteredInterpolation.ThinPlate",
-    "category": "type",
+    "category": "function",
     "text": "ThinPlate()\n\nDefine a Thin Plate Spline Radial Basis Function\n\n(r) = r^2 ln(r)\n\nThis is a shorthand for Polyharmonic(2).\n\n\n\n"
 },
 
