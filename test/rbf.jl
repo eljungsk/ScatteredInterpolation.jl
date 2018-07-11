@@ -46,7 +46,7 @@ radialBasisFunctions = (Gaussian(2), Multiquadratic(2), InverseQuadratic(2), Inv
         @testset "Mixed RBF method equality" begin
 
             itpConstant = interpolate(Gaussian(), points, data)
-            itpMixed = interpolate(repmat([Gaussian()],size(points,2)), points, data)
+            itpMixed = interpolate(repeat([Gaussian()], outer = size(points,2)), points, data)
 
             # Check that the result is the same when dispatching on multiple,
             # but equal RBFs for each interpolation point
