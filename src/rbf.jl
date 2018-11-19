@@ -182,7 +182,7 @@ struct GeneralizedRBFInterpolant{F, T, A, N, M} <: RadialBasisInterpolant where 
     metric::M
 end
 
-function interpolate(rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
+function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
                      metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
@@ -204,7 +204,7 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunc
 end
 
 @inline evaluateRBF!(A, rbf) = A .= rbf.(A)
-@inline function evaluateRBF!(A, rbfs::AbstractVector{<:RadialBasisFunction})
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction})
     for (j, rbf) in enumerate(rbfs)
         A[:,j] .= rbf.(@view A[:,j])
     end
