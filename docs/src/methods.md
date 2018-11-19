@@ -12,16 +12,17 @@ u(\mathbf{x}) = \displaystyle \sum_{i = 1}^{N}{ w_i \phi(||\mathbf{x} - \mathbf{
 where ``||\mathbf{x} - \mathbf{x_i}||`` is the distance between ``\mathbf{x}`` and 
 ``\mathbf{x}_i``, and ``\phi(r)`` is one of the basis functions defined below.
 
-If a 'GeneralizedRadialBasisFunction' is used, an additional polynomial term is added in
-order for the resulting matrix to be positive definite:
-```math
-u(\mathbf{x}) = \displaystyle \sum_{i = 1}^{N}{ w_i \phi(||\mathbf{x} - \mathbf{x_i}||)} + \\mathbf{P(x)λ}
-```
-where ``\\mathbf{P(x)}`` is the matrix defining a complete homogeneous symmetric polynomial
-of degree 'degree', and ``λ`` is the polynomial coefficients.
-
 To use radial basis function interpolation, pass one of the available basis functions as 
 `method` to `interpolate`.
+
+If a `GeneralizedRadialBasisFunction` is used, an additional polynomial term is added in
+order for the resulting matrix to be positive definite:
+```math
+u(\mathbf{x}) = \displaystyle \sum_{i = 1}^{N}{ w_i \phi(||\mathbf{x} - \mathbf{x_i}||)} + \mathbf{P}(\mathbf{x})\mathbf{λ}
+```
+where ``\mathbf{P}(\mathbf{x})`` is the matrix defining a complete homogeneous symmetric
+polynomial of degree `degree`, and ``\mathbf{λ}`` is a vector containing the polynomial
+coefficients.
 
 ### Available basis functions
 
@@ -62,7 +63,7 @@ To use radial basis function interpolation, pass one of the available basis func
     ```
 
   * [`ThinPlate`](@ref) spline
-    
+
     A thin plate spline is the special case ``k = 2`` of the polyharmonic splines.
     `ThinPlate()` is a shorthand for `Polyharmonic(2)`.
 
@@ -72,7 +73,7 @@ To use radial basis function interpolation, pass one of the available basis func
     ϕ(r) = \left(1 + (ɛr)^2\right)^\beta
     ```
     The generalzized multiquadratic results in a positive definite system for polynomials of
-    'order' ``m \geq \lceil\beta\rceil``.
+    `degree` ``m \geq \lceil\beta\rceil``.
 
   * [`GeneralizedPolyharmonic`](@ref) spline
 
@@ -86,7 +87,7 @@ To use radial basis function interpolation, pass one of the available basis func
     \end{cases}
     ```
     The generalized polyharmonic spline results in a positive definite system for
-    polynomials of 'order'
+    polynomials of `degree`
     ```math
     \begin{cases}
         \begin{align*}

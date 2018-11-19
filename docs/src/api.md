@@ -21,6 +21,8 @@ Gaussian
 InverseQuadratic
 Polyharmonic
 ThinPlate
+GeneralizedMultiquadratic
+GeneralizedPolyharmonic
 ```
 
 ### Inverse Distance Weighting (Shepard)
