@@ -9,7 +9,7 @@ radialBasisFunctions = (Gaussian(2),
                         InverseMultiquadratic(2),
                         Polyharmonic(2),
                         ThinPlate(),
-                        GeneralizedMultiquadratic(2, 3/2, 2),
+                        GeneralizedMultiquadratic(2, 1/2, 2),
                         GeneralizedPolyharmonic(3, 2))
 
 @testset "RBF" begin
@@ -31,7 +31,7 @@ radialBasisFunctions = (Gaussian(2),
         elseif isa(r, Polyharmonic)
             x > 0.0 ? x^2*log(x) : 0.0
         elseif isa(r, GeneralizedMultiquadratic)
-            (1 + (2x)^2)^(3/2)
+            (1 + (2x)^2)^(1/2)
         elseif isa(r, GeneralizedPolyharmonic)
             x^3
         end
