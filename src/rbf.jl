@@ -1,5 +1,9 @@
-abstract type RadialBasisFunction <: InterpolationMethod end
-abstract type GeneralizedRadialBasisFunction <: RadialBasisFunction end
+abstract type AbstractRadialBasisFunction <: InterpolationMethod end
+abstract type RadialBasisFunction <: AbstractRadialBasisFunction end
+abstract type GeneralizedRadialBasisFunction <: AbstractRadialBasisFunction end
+
+Base.iterate(x::RadialBasisFunction) = (x, nothing)
+Base.iterate(x::RadialBasisFunction, ::Any) = nothing
 
 export  Gaussian,
         Multiquadratic,
@@ -159,144 +163,100 @@ function (rbf::GeneralizedPolyharmonic)(r)
     expr
 end
 
-struct RBFInterpolant{F, T, N, M} <: ScatteredInterpolant
+abstract type RadialBasisInterpolant <: ScatteredInterpolant end
+
+struct RBFInterpolant{F, T, A, N, M} <: RadialBasisInterpolant where A <: AbstractArray{<:Real, 2}
 
     w::Array{T,N}
-    points::Array{T,2}
+    points::A
     rbf::F
     metric::M
 end
 
-struct GeneralizedRBFInterpolant{F, T, N, M} <: ScatteredInterpolant
+struct GeneralizedRBFInterpolant{F, T, A, N, M} <: RadialBasisInterpolant where A <: AbstractArray{<:Real, 2}
 
     w::Array{T,N}
     λ::Array{T,N}
-    points::Array{T,2}
+    points::A
     rbf::F
     metric::M
 end
 
-function interpolate(rbf::RadialBasisFunction,
+function interpolate(rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
                      metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
-    @. A = rbf(A)
+    evaluateRBF!(A, rbf)
 
     # Solve for the weights
-    w = A\samples
+    itp = solveForWeights(A, points, samples, rbf, metric)
 
     # Create and return an interpolation object
     if returnRBFmatrix    # Return matrix A
-        return RBFInterpolant(w, points, rbf, metric), A
+        return itp, A
     else
-        return RBFInterpolant(w, points, rbf, metric)
+        return itp
     end
 
 end
 
-function interpolate(rbfs::Vector{T} where T <: ScatteredInterpolation.RadialBasisFunction,
-                     points::AbstractArray{<:Real,2},
-                     samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
-
-    # Compute pairwise distances and apply the Radial Basis Function
-    A = pairwise(metric, points)
-
-    n = size(points,2)
+@inline evaluateRBF!(A, rbf) = A .= rbf.(A)
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:RadialBasisFunction})
     for (j, rbf) in enumerate(rbfs)
-        for i = 1:n
-            A[i,j] = rbf(A[i,j])
-        end
+        A[:,j] .= rbf.(@view A[:,j])
     end
-
-    # Solve for the weights
-    w = A\samples
-
-    # Create and return an interpolation object
-    if returnRBFmatrix    # Return matrix A
-        return RBFInterpolant(w, points, rbfs, metric), A
-    else
-        return RBFInterpolant(w, points, rbfs, metric)
-    end
-
 end
 
-function interpolate(rbf::GeneralizedRadialBasisFunction,
-                     points::AbstractArray{<:Real,2},
-                     samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
-
-    # Compute pairwise distances and apply the Radial Basis Function, and polynomial matrix
-    A = pairwise(metric, points)
-    @. A = rbf(A)
-    Af = factorize(A)
-    P = generateMultivariatePolynomial(points, rbf.degree)
+@inline function solveForWeights(A, points, samples,
+                                    rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
+                                    metric)
+    w = A\samples
+    RBFInterpolant(w, points, rbf, metric)
+end
+@inline function solveForWeights(A, points, samples,
+                                    rbf::Union{T, AbstractVector{T}} where T <: Union{GeneralizedRadialBasisFunction, RadialBasisFunction},
+                                    metric)
+    # Use the maximum degree among the generalized RBF:s
+    P = getPolynomial(rbf, points)
 
     # Solve for the weights and polynomial coefficients
     # We end up with a blocked system, so we don't have to form the full matrix
+    Af = factorize(A)
     B = -P'*(Af\P)
     E = B\(P'*(Af\samples))
 
     w = A\(I*samples + P*E)
     λ = -E
 
-    # Create and return an interpolation object
-    if returnRBFmatrix    # Return matrix A
-        return GeneralizedRBFInterpolant(w, λ, points, rbf, metric), A
-    else
-        return GeneralizedRBFInterpolant(w, λ, points, rbf, metric)
-    end
-
+    GeneralizedRBFInterpolant(w, λ, points, rbf, metric)
 end
 
-function evaluate(itp::RBFInterpolant, points::AbstractArray{<:Real, 2})
+function evaluate(itp::RadialBasisInterpolant, points::AbstractArray{<:Real, 2})
 
-    # Compute distance matrix
+    # Compute distance matrix and evaluate the RBF
     A = pairwise(itp.metric, points, itp.points)
-    @. A = itp.rbf(A)
+    evaluateRBF!(A, itp.rbf)
+
+    # Compute polynomial matrix for generalized RBF:s
+    P = getPolynomial(itp.rbf, points)
 
     # Compute the interpolated values
-    return A*itp.w
+    return computeInterpolatedValues(A, P, itp)
 end
 
-function evaluate(itp::RBFInterpolant{S,T,U,V}, points::AbstractArray{<:Real, 2}) where {S <: Vector, T, U, V}
+@inline getPolynomial(rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction, points) = nothing
+@inline function getPolynomial(rbf::Union{T, AbstractVector{T}} where T <: Union{GeneralizedRadialBasisFunction, RadialBasisFunction}, points)
 
-    # Compute distance matrix
-    A = pairwise(itp.metric, points, itp.points)
-    for (j, rbf) in enumerate(itp.rbf)
-        @. A[:,j] = rbf(A[:,j])
-    end
-
-    # Compute the interpolated values
-    return A*itp.w
+    # Use the maximum degree among the generalized RBF:s
+    degree = maximum(x isa GeneralizedRadialBasisFunction ? x.degree : 0 for x in rbf)
+    P = generateMultivariatePolynomial(points, degree)
 end
 
-function evaluate(itp::GeneralizedRBFInterpolant, points::AbstractArray{<:Real, 2})
-
-    # Compute distance matrix and polynomial matrix
-    A = pairwise(itp.metric, points, itp.points)
-    @. A = itp.rbf(A)
-    P = generateMultivariatePolynomial(points, itp.rbf.degree)
-
-    # Compute the interpolated values
-    return A*itp.w + P*itp.λ
-end
-
-function evaluate(itp::GeneralizedRBFInterpolant{S,T,U,V}, points::AbstractArray{<:Real, 2}) where {S <: Vector, T, U, V}
-
-    # Compute distance matrix and polynomial matrix
-    A = pairwise(itp.metric, points, itp.points)
-    for (j, rbf) in enumerate(itp.rbf)
-        @. A[:,j] = rbf(A[:,j])
-    end
-    P = generateMultivariatePolynomial(points, itp.rbf.degree)
-
-    # Compute the interpolated values
-    return A*itp.w + P*itp.λ
-end
+@inline computeInterpolatedValues(A, P, itp::RBFInterpolant) = A*itp.w
+@inline computeInterpolatedValues(A, P, itp::GeneralizedRBFInterpolant) = A*itp.w + P*itp.λ
 
 # Helper function to generate matrices defining complete homogenic symmetric polynomials
 function generateMultivariatePolynomial(points::AbstractArray{<:Real, 2}, degree::Integer)
