@@ -1,7 +1,9 @@
 module ScatteredInterpolation
 
 using Distances,
-    NearestNeighbors
+    NearestNeighbors,
+    Combinatorics,
+    LinearAlgebra
 
 export interpolate,
     evaluate
