@@ -2,8 +2,8 @@ abstract type AbstractRadialBasisFunction <: InterpolationMethod end
 abstract type RadialBasisFunction <: AbstractRadialBasisFunction end
 abstract type GeneralizedRadialBasisFunction <: AbstractRadialBasisFunction end
 
-Base.iterate(x::RadialBasisFunction) = (x, nothing)
-Base.iterate(x::RadialBasisFunction, ::Any) = nothing
+Base.iterate(x::AbstractRadialBasisFunction) = (x, nothing)
+Base.iterate(x::AbstractRadialBasisFunction, ::Any) = nothing
 
 export  Gaussian,
         Multiquadratic,
