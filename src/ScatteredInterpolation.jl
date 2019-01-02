@@ -27,7 +27,7 @@ function evaluate(itp::ScatteredInterpolant, points::AbstractArray{<:Real, 1})
 end
 
 """
-    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false)
+    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false; smooth = false)
 
 Create an interpolation of the data in `samples` sampled at the locations defined in
 `points` based on the interpolation method `method`. `metric` is any of the metrics defined
@@ -44,6 +44,11 @@ interpolations.
 The RadialBasisFunction interpolation supports the use of unique RBF functions and widths
 for each sampled point by supplying `method` with a vector of interpolation methods
 of length ``k``.
+
+The RadialBasisFunction interpolation also supports smoothing of the data points using
+ridge regression. All point can be smoothed equally supplying a scalar value, alternatively each
+point can be smoothed independently by supplying a vector of smoothing values. Note that
+when using smoothing the method is no longer interpolating. 
 
 The returned `ScatteredInterpolant` object can be passed to `evaluate` to interpolate the
 data to new points.

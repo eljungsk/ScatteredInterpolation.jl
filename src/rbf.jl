@@ -185,10 +185,19 @@ end
 function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false) where {N}
+                     metric = Euclidean(), returnRBFmatrix::Bool = false,
+                     smooth::S = false) where {N} where {S}
 
     # Compute pairwise distances and apply the Radial Basis Function
     A = pairwise(metric, points)
+    
+    # Apply smoothing (ridge regression)
+    if S <: AbstractVector
+        A += Diagonal(smooth)
+    elseif S <: Real
+        A += smooth*I
+    end
+
     evaluateRBF!(A, rbf)
 
     # Solve for the weights
