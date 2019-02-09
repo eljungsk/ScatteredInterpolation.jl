@@ -46,9 +46,9 @@ for each sampled point by supplying `method` with a vector of interpolation meth
 of length ``k``.
 
 The RadialBasisFunction interpolation also supports smoothing of the data points using
-ridge regression. All point can be smoothed equally supplying a scalar value, alternatively each
-point can be smoothed independently by supplying a vector of smoothing values. Note that
-when using smoothing the method is no longer interpolating. 
+ridge regression. All points can be smoothed equally supplying a scalar value,
+alternatively each point can be smoothed independently by supplying a vector of smoothing
+values. Note that it is no longer interpolating when using smoothing. 
 
 The returned `ScatteredInterpolant` object can be passed to `evaluate` to interpolate the
 data to new points.
