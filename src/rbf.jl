@@ -186,19 +186,16 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
                      metric = Euclidean(), returnRBFmatrix::Bool = false,
-                     smooth::S = false) where {N} where {S}
+                     smooth::Union{S, AbstractVector{S}} = false) where {N} where {S<:Number}
 
-    # Compute pairwise distances and apply the Radial Basis Function
+    #hinder smooth from being set to true and interpreted as the value 1 
+    @assert smooth != true "set the smoothing value as a number or vector of numbers"
+
+    # Compute pairwise distances, apply the Radial Basis Function
+    # and optional smoothing (ridge regression)
     A = pairwise(metric, points)
     
-    evaluateRBF!(A, rbf)
-
-    # Apply smoothing (ridge regression)
-    if S <: Vector{Float64}
-        A += Diagonal(smooth)
-    elseif S <: Float64
-        A += smooth*I
-    end
+    evaluateRBF!(A, rbf, smooth)
 
     # Solve for the weights
     itp = solveForWeights(A, points, samples, rbf, metric)
@@ -212,10 +209,48 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
 
 end
 
-@inline evaluateRBF!(A, rbf) = A .= rbf.(A)
+@inline function evaluateRBF!(A, rbf)
+    A .= rbf.(A)
+end
 @inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction})
     for (j, rbf) in enumerate(rbfs)
         A[:,j] .= rbf.(@view A[:,j])
+    end
+end
+@inline function evaluateRBF!(A, rbf, smooth::Bool)
+    A .= rbf.(A)
+end
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::Bool)
+    for (j, rbf) in enumerate(rbfs)
+        A[:,j] .= rbf.(@view A[:,j])
+    end
+end
+@inline function evaluateRBF!(A, rbf, smooth::Vector{T}) where T <: Number
+    A .= rbf.(A)
+    for i = 1:size(A,1)
+        A[i,i] += smooth[i]
+    end
+end
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::Vector{T}) where T <: Number
+    for (j, rbf) in enumerate(rbfs)
+        A[:,j] .= rbf.(@view A[:,j])
+    end
+    for i = 1:size(A,1)
+        A[i,i] += smooth[i]
+    end
+end
+@inline function evaluateRBF!(A, rbf, smooth::T) where T <: Number
+    A .= rbf.(A)
+    for i = 1:size(A,1)
+        A[i,i] += smooth
+    end
+end
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::T) where T <: Number
+    for (j, rbf) in enumerate(rbfs)
+        A[:,j] .= rbf.(@view A[:,j])
+    end
+    for i = 1:size(A,1)
+        A[i,i] += smooth
     end
 end
 

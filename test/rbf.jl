@@ -79,6 +79,8 @@ radialBasisFunctions = (Gaussian(2),
         itp = interpolate(r, points, data; smooth = 1000.0)
         @test itp.w ≈ interpolate(r, points, data; smooth = [1000.0 for i = 1:size(points,2)]).w
 
+        # Can not call the method with true causing true to be silently interpreted as 1 
+        @test_throws AssertionError interpolate(r, points, data; smooth = true)
 
         # The method is no longer interpolating using smoothing
         ev = evaluate(itp, points)
