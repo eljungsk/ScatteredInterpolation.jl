@@ -40,10 +40,10 @@ scattered data to a grid. Using the same data as above, we can interpolate it to
 
 ```@example 1
 n = 5
-x = linspace(0, 1, n)
-y = linspace(0, 1, n)
-X = repmat(x, 1, n)[:]
-Y = repmat(y', n, 1)[:]
+x = range(0, stop = 1, length = n)
+y = range(0, stop = 1, length = n)
+X = repeat(x, n)[:]
+Y = repeat(y', n)[:]
 gridPoints = [X Y]'
 
 itp = interpolate(Multiquadratic(), points, samples)

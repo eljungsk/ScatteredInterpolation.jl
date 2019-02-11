@@ -1,7 +1,6 @@
 using Documenter, ScatteredInterpolation
 
 makedocs(
-    format = HTML(),
     sitename = "ScatteredInterpolation.jl",
     pages = [
         "Home" => "index.md",
