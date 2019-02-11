@@ -71,6 +71,22 @@ radialBasisFunctions = (Gaussian(2),
         @test_throws TypeError interpolate(r, points, data; returnRBFmatrix = "true")
     end
 
+    @testset "Smooth RBF" begin
+        r = radialBasisFunctions[1]
+        @test interpolate(r, points, data; smooth = false).w ≈ interpolate(r, points, data).w
+
+
+        itp = interpolate(r, points, data; smooth = 1000.0)
+        @test itp.w ≈ interpolate(r, points, data; smooth = [1000.0 for i = 1:size(points,2)]).w
+
+        # Can not call the method with true causing true to be silently interpreted as 1 
+        @test_throws AssertionError interpolate(r, points, data; smooth = true)
+
+        # The method is no longer interpolating using smoothing
+        ev = evaluate(itp, points)
+        @test !(ev ≈ data)
+    end
+
     @testset "Generalized RBF:s" begin
         points = [1. 2; 3 4]
         @test ScatteredInterpolation.generateMultivariatePolynomial(points, 2) ≈ 
