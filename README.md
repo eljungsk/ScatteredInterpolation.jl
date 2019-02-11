@@ -4,7 +4,7 @@
 
 | **Documentation** | **Build & Testing Status** |
 |:-----------------:|:--------------------------:|
-[![](https://img.shields.io/badge/docs-latest-blue.svg)](https://eljungsk.github.io/ScatteredInterpolation.jl/latest) [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://eljungsk.github.io/ScatteredInterpolation.jl/stable) | [![Build Status](https://travis-ci.org/eljungsk/ScatteredInterpolation.jl.svg?branch=master)](https://travis-ci.org/eljungsk/ScatteredInterpolation.jl) [![codecov.io](https://codecov.io/github/eljungsk/ScatteredInterpolation.jl/coverage.svg?branch=master)](https://codecov.io/github/eljungsk/ScatteredInterpolation.jl?branch=master) |
+[![](https://img.shields.io/badge/docs-latest-blue.svg)](https://eljungsk.github.io/ScatteredInterpolation.jl/dev) [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://eljungsk.github.io/ScatteredInterpolation.jl/stable) | [![Build Status](https://travis-ci.org/eljungsk/ScatteredInterpolation.jl.svg?branch=master)](https://travis-ci.org/eljungsk/ScatteredInterpolation.jl) [![codecov.io](https://codecov.io/github/eljungsk/ScatteredInterpolation.jl/coverage.svg?branch=master)](https://codecov.io/github/eljungsk/ScatteredInterpolation.jl?branch=master) |
 
 ## Installation
 
