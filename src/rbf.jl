@@ -193,7 +193,11 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
 
     # Compute pairwise distances, apply the Radial Basis Function
     # and optional smoothing (ridge regression)
+<<<<<<< HEAD
     A = pairwise(metric, points;dims=2)
+=======
+    A = pairwise(metric, points)
+>>>>>>> 53d30eee1ed0d7bacb468684c7c0f1f2ad59322c
     
     evaluateRBF!(A, rbf, smooth)
 

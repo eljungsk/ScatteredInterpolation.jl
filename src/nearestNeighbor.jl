@@ -20,6 +20,13 @@ function interpolate(nn::NearestNeighbor,
                      metric = Euclidean()) where {N}
 
     # Build a kd-tree of the points
+    # If we get an adjoint, make a copy (or else KDTree will be sad)
+    if points isa LinearAlgebra.Adjoint
+        points = copy(points)
+    end
+    if samples isa LinearAlgebra.Adjoint
+        samples = copy(samples)
+    end
     tree = KDTree(points, metric)
 
     return NearestNeighborInterpolant(samples, tree)

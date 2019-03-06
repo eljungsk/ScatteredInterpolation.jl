@@ -1,7 +1,6 @@
 using Documenter, ScatteredInterpolation
 
 makedocs(
-    format = :html,
     sitename = "ScatteredInterpolation.jl",
     pages = [
         "Home" => "index.md",
@@ -13,7 +12,4 @@ makedocs(
 deploydocs(
     repo = "github.com/eljungsk/ScatteredInterpolation.jl.git",
     target = "build",
-    julia = "0.6",
-    deps = nothing,
-    make = nothing,
 )

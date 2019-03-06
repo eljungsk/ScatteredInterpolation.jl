@@ -1,13 +1,14 @@
 
 # Define some points and data in 2D
 points = permutedims([0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0], (2,1))
+points_adjoint = [0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0]'
 data = [0.0; 0.5; 0.5; 1.0]
 
 @testset "NearestNeighbor" begin
     
-    @testset "Evaluation" begin
+    @testset "Evaluation" for p in (points, points_adjoint)
 
-        itp = interpolate(NearestNeighbor(), points, data)
+        itp = interpolate(NearestNeighbor(), p, data)
 
         # Check that we get back the original data at the sample points
         ev = evaluate(itp, points)
