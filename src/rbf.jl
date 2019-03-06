@@ -193,7 +193,7 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
 
     # Compute pairwise distances, apply the Radial Basis Function
     # and optional smoothing (ridge regression)
-    A = pairwise(metric, points)
+    A = pairwise(metric, points;dims=2)
     
     evaluateRBF!(A, rbf, smooth)
 
@@ -281,7 +281,7 @@ end
 function evaluate(itp::RadialBasisInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix and evaluate the RBF
-    A = pairwise(itp.metric, points, itp.points)
+    A = pairwise(itp.metric, points, itp.points;dims=2)
     evaluateRBF!(A, itp.rbf)
 
     # Compute polynomial matrix for generalized RBF:s

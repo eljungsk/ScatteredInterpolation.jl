@@ -32,7 +32,7 @@ end
 function evaluate(itp::ShepardInterpolant, points::AbstractArray{<:Real,2})
 
     # Compute distances between sample points and interpolation points
-    d = pairwise(itp.metric, itp.points, points)
+    d = pairwise(itp.metric, itp.points, points;dims=2)
 
     # Evaluate point by point
     m = size(points, 2)
