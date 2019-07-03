@@ -17,5 +17,6 @@ data = [0.0; 0.5; 0.5; 1.0]
         # Check that we get back the original data at the sample points
         ev = evaluate(itp, points)
         @test ev ≈ data
+        @test_nowarn evaluate(itp, [0.6; 0.6])
     end
 end
