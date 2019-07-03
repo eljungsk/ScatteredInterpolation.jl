@@ -165,19 +165,19 @@ end
 
 abstract type RadialBasisInterpolant <: ScatteredInterpolant end
 
-struct RBFInterpolant{F, T, A, N, M} <: RadialBasisInterpolant where A <: AbstractArray{<:Real, 2}
+struct RBFInterpolant{T1, T2, F, M} <: RadialBasisInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
 
-    w::Array{T,N}
-    points::A
+    w::T1
+    points::T2
     rbf::F
     metric::M
 end
 
-struct GeneralizedRBFInterpolant{F, T, A, N, M} <: RadialBasisInterpolant where A <: AbstractArray{<:Real, 2}
+struct GeneralizedRBFInterpolant{T1, T2, F, M} <: RadialBasisInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
 
-    w::Array{T,N}
-    λ::Array{T,N}
-    points::A
+    w::T1
+    λ::T1
+    points::T2
     rbf::F
     metric::M
 end

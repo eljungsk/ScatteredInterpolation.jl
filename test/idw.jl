@@ -1,6 +1,7 @@
 
 # Define some points and data in 2D
-points = permutedims([0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0], (2,1))
+arrayPoints = permutedims([0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0], (2,1))
+adjointPoints = [0.0 0.0; 0.0 1.0; 1.0 0.0; 1.0 1.0]'
 data = [0.0; 0.5; 0.5; 1.0]
 
 @testset "Shepard" begin
@@ -9,7 +10,7 @@ data = [0.0; 0.5; 0.5; 1.0]
         @eval @test $idw(2) == $idw()
     end
 
-    @testset "Evaluation" begin
+    @testset "Evaluation" for points in (arrayPoints, adjointPoints)
 
         itp = interpolate(Shepard(), points, data)
 

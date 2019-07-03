@@ -1,6 +1,7 @@
 
 # Define some points and data in 2D
-points = permutedims([0.0 0.0; 0.0 1.0; 0.5 0.5; 1.0 0.0; 1.0 1.0], (2,1))
+arrayPoints = permutedims([0.0 0.0; 0.0 1.0; 0.5 0.5; 1.0 0.0; 1.0 1.0], (2,1))
+adjointPoints = [0.0 0.0; 0.0 1.0; 0.5 0.5; 1.0 0.0; 1.0 1.0]'
 data = [0.0; 0.5; 0.5; 0.5; 1.0]
 
 radialBasisFunctions = (Gaussian(2),
@@ -38,14 +39,16 @@ radialBasisFunctions = (Gaussian(2),
 
         @test r.(data) ≈ f.(data)
 
-        itp = interpolate(r, points, data)
+        for points in (arrayPoints, adjointPoints)
+            itp = interpolate(r, points, data)
 
-        # Check that we get back the original data at the sample points
-        ev = evaluate(itp, points)
-        @test ev ≈ data
+            # Check that we get back the original data at the sample points
+            ev = evaluate(itp, points)
+            @test ev ≈ data
+        end
     end
 
-    @testset "Mixed RBF Evaluation" begin
+    @testset "Mixed RBF Evaluation" for points in (arrayPoints, adjointPoints)
 
         RBFs = [Gaussian(2), Multiquadratic(2), InverseQuadratic(2), InverseMultiquadratic(2)]
         itp = interpolate(RBFs, points, data)
@@ -65,13 +68,13 @@ radialBasisFunctions = (Gaussian(2),
         end
     end
 
-    @testset "returnRBFmatrix" begin
+    @testset "returnRBFmatrix" for points in (arrayPoints, adjointPoints)
         r = radialBasisFunctions[1]
         @test typeof(interpolate(r, points, data; returnRBFmatrix = true)) <: Tuple
         @test_throws TypeError interpolate(r, points, data; returnRBFmatrix = "true")
     end
 
-    @testset "Smooth RBF" begin
+    @testset "Smooth RBF" for points in (arrayPoints, adjointPoints)
         r = radialBasisFunctions[1]
         @test interpolate(r, points, data; smooth = false).w ≈ interpolate(r, points, data).w
 

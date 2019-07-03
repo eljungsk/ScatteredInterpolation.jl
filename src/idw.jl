@@ -12,10 +12,10 @@ struct Shepard{T} <: ShepardType where T <: Real
 end
 Shepard() = Shepard(2)
 
-struct ShepardInterpolant{F, T1, T2, N, M} <: ScatteredInterpolant
+struct ShepardInterpolant{T1, T2, F, M} <: ScatteredInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
 
-    data::Array{T1,N}
-    points::Array{T2,2}
+    data::T1
+    points::T2
     idw::F
     metric::M
 end
