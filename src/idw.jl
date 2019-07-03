@@ -62,6 +62,6 @@ function evaluatePoint(idw::Shepard,
                        d::AbstractVector) where {N}
 
     # Compute weigths and return the weighted sum
-    w = d.^idw.P
+    w = 1.0./(d.^idw.P)
     value = sum(w.*data, dims = 1)./sum(w)
 end

@@ -14,9 +14,11 @@ data = [0.0; 0.5; 0.5; 1.0]
 
         itp = interpolate(Shepard(), points, data)
 
-        # Check that we get back the original data at the sample points
+        # Check that we get back the original data at the sample points and that we get close
+        # when evaluating near the sampling points
         ev = evaluate(itp, points)
         @test ev ≈ data
-        @test_nowarn evaluate(itp, [0.6; 0.6])
+        ev = evaluate(itp, points .+ 0.001*randn(size(points)))
+        @test all(isapprox.(data, ev, atol = 1e-2))
     end
 end
