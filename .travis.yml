@@ -17,7 +17,8 @@ notifications:
 #  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 #  - julia -e 'Pkg.clone(pwd()); Pkg.build("ScatteredInterpolation"); Pkg.test("ScatteredInterpolation"; coverage=true)'
 after_success:
-  - julia -e 'cd(Pkg.dir("ScatteredInterpolation")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+  - julia --project=test/coverage -e 'using Pkg; Pkg.instantiate()'
+  - julia --project=test/coverage test/coverage/coverage.jl
 
 jobs:
   include:
