@@ -1,4 +1,6 @@
-using ScatteredInterpolation
+using ScatteredInterpolation, Random
+
+Random.seed!(2)
 
 if VERSION < v"0.7-"
     using Base.Test
