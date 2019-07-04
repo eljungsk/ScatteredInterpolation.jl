@@ -8,9 +8,9 @@
 
 ## Installation
 
-`ScatteredInterpolation.jl` is registered in `METADATA`. To install, run 
+`ScatteredInterpolation.jl` is registered in the general registry. To install, run 
 ```
-julia> Pkg.add("ScatteredInterpolation")
+julia> ]add ScatteredInterpolation
 ```
 followed by `using ScatteredInterpolation` to load the package.
 
