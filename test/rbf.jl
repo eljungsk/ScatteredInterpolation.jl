@@ -67,7 +67,7 @@ radialBasisFunctions = (Gaussian(2),
 
             # Check that the result is the same when dispatching on multiple,
             # but equal RBFs for each interpolation point
-            @test evaluate(itpConstant, points) == evaluate(itpMixed, points)
+            @test evaluate(itpConstant, points) ≈ evaluate(itpMixed, points)
         end
     end
 

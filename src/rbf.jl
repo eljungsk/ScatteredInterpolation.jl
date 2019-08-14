@@ -195,7 +195,7 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
     # and optional smoothing (ridge regression)
     A = pairwise(metric, points;dims=2)
     
-    evaluateRBF!(A, rbf, smooth)
+    A = evaluateRBF!(A, rbf, smooth)
 
     # Solve for the weights
     itp = solveForWeights(A, points, samples, rbf, metric)
@@ -211,47 +211,34 @@ end
 
 @inline function evaluateRBF!(A, rbf)
     A .= rbf.(A)
+    return Symmetric(A)
 end
 @inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction})
     for (j, rbf) in enumerate(rbfs)
         A[:,j] .= rbf.(@view A[:,j])
     end
+    return A
 end
-@inline function evaluateRBF!(A, rbf, smooth::Bool)
-    A .= rbf.(A)
+@inline function evaluateRBF!(A, rbf, smooth)
+    A = evaluateRBF!(A, rbf)
+    A = addSmoothing!(A, smooth)
+    return A
 end
-@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::Bool)
-    for (j, rbf) in enumerate(rbfs)
-        A[:,j] .= rbf.(@view A[:,j])
-    end
+
+@inline function addSmoothing!(A, smooth::Bool)
+    return A
 end
-@inline function evaluateRBF!(A, rbf, smooth::Vector{T}) where T <: Number
-    A .= rbf.(A)
-    for i = 1:size(A,1)
+@inline function addSmoothing!(A, smooth::Vector{T}) where T <: Number
+    for i = 1:size(A, 1)
         A[i,i] += smooth[i]
     end
+    return A
 end
-@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::Vector{T}) where T <: Number
-    for (j, rbf) in enumerate(rbfs)
-        A[:,j] .= rbf.(@view A[:,j])
-    end
-    for i = 1:size(A,1)
-        A[i,i] += smooth[i]
-    end
-end
-@inline function evaluateRBF!(A, rbf, smooth::T) where T <: Number
-    A .= rbf.(A)
-    for i = 1:size(A,1)
+@inline function addSmoothing!(A, smooth::T) where T <: Number
+    for i = 1:size(A, 1)
         A[i,i] += smooth
     end
-end
-@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, smooth::T) where T <: Number
-    for (j, rbf) in enumerate(rbfs)
-        A[:,j] .= rbf.(@view A[:,j])
-    end
-    for i = 1:size(A,1)
-        A[i,i] += smooth
-    end
+    return A
 end
 
 @inline function solveForWeights(A, points, samples,
@@ -282,7 +269,7 @@ function evaluate(itp::RadialBasisInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix and evaluate the RBF
     A = pairwise(itp.metric, points, itp.points;dims=2)
-    evaluateRBF!(A, itp.rbf)
+    A = evaluateRBF!(A, itp.rbf)
 
     # Compute polynomial matrix for generalized RBF:s
     P = getPolynomial(itp.rbf, points)
