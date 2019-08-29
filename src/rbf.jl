@@ -209,11 +209,16 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
 
 end
 
-@inline function evaluateRBF!(A, rbf)
+@inline function evaluateRBF!(A, rbf, symmetric::Bool = false)
     A .= rbf.(A)
-    return Symmetric(A)
+
+    if symmetric
+        A = Symmetric(A)
+    end
+
+    return A
 end
-@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction})
+@inline function evaluateRBF!(A, rbfs::AbstractVector{<:AbstractRadialBasisFunction}, symmetric::Bool = false)
     for (j, rbf) in enumerate(rbfs)
         A[:,j] .= rbf.(@view A[:,j])
     end
@@ -225,9 +230,6 @@ end
     return A
 end
 
-@inline function addSmoothing!(A, smooth::Bool)
-    return A
-end
 @inline function addSmoothing!(A, smooth::Vector{T}) where T <: Number
     for i = 1:size(A, 1)
         A[i,i] += smooth[i]
@@ -268,8 +270,8 @@ end
 function evaluate(itp::RadialBasisInterpolant, points::AbstractArray{<:Real, 2})
 
     # Compute distance matrix and evaluate the RBF
-    A = pairwise(itp.metric, points, itp.points;dims=2)
-    A = evaluateRBF!(A, itp.rbf)
+    A = pairwise(itp.metric, points, itp.points; dims=2)
+    A = evaluateRBF!(A, itp.rbf, false)
 
     # Compute polynomial matrix for generalized RBF:s
     P = getPolynomial(itp.rbf, points)
