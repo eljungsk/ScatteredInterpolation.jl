@@ -1,6 +1,6 @@
 name = "ScatteredInterpolation"
 uuid = "3f865c0f-6dca-5f4d-999b-29fe1e7e3c92"
-version = "0.3.4"
+version = "0.3.5"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
