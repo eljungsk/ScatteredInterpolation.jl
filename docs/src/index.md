@@ -31,7 +31,7 @@ julia> itp = interpolate(Multiquadratic(), points, samples);
 
 julia> interpolated = evaluate(itp, [0.6; 0.6])
 1-element Vector{Float64}:
- 0.6105036860019828
+ 0.6105
 ```
 
 If we instead want to use nearest neighbor interpolation:
@@ -40,7 +40,7 @@ julia> itp = interpolate(NearestNeighbor(), points, samples);
 
 julia> interpolated = evaluate(itp, [0.6; 0.6])
 1×1 Matrix{Float64}:
- 0.5
+ 0.5000
 
 ```
 
@@ -50,6 +50,8 @@ scattered data to a grid. Using the same data as above, we can interpolate it to
 
 ```@meta
 DocTestSetup = quote
+    using Printf
+    Base.show(io::IO, f::Float64) = @printf(io, "%.4f", f)
     using ScatteredInterpolation
     samples = [0.0; 0.5; 0.5; 0.5; 1.0];
     points = [0.0 0.0; 0.0 1.0; 1.0 0.0; 0.5 0.5; 1.0 1.0]';
@@ -71,9 +73,9 @@ gridded = reshape(interpolated, n, n)
 # output
 
 5×5 Matrix{Float64}:
- -1.11022e-16  0.108133  0.236473  0.370317  0.5
-  0.108133     0.226333  0.361499  0.497542  0.62459
-  0.236473     0.361499  0.5       0.635589  0.758248
-  0.370317     0.497542  0.635589  0.768751  0.886774
-  0.5          0.62459   0.758248  0.886774  1.0
+ -0.0000  0.1081  0.2365  0.3703  0.5000
+  0.1081  0.2263  0.3615  0.4975  0.6246
+  0.2365  0.3615  0.5000  0.6356  0.7582
+  0.3703  0.4975  0.6356  0.7688  0.8868
+  0.5000  0.6246  0.7582  0.8868  1.0000
 ```
