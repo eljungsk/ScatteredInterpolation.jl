@@ -66,7 +66,7 @@ DocTestSetup = quote
 end
 ```
 
-```jldoctest gridding
+```jldoctest gridding; filter = r"-?0.0000"
 n = 5
 x = range(0, stop = 1, length = n)
 y = range(0, stop = 1, length = n)
