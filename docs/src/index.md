@@ -20,6 +20,14 @@ Depth = 2
 
 Interpolate data defined on the vertices and in the center of a square using a
 multiquadratic radial basis function:
+
+```@meta
+DocTestSetup = quote
+    using Printf
+    Base.show(io::IO, f::Float64) = @printf(io, "%.4f", f)
+end
+```
+
 ```jldoctest intro
 julia> using ScatteredInterpolation
 
