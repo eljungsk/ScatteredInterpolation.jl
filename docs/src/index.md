@@ -31,7 +31,7 @@ julia> itp = interpolate(Multiquadratic(), points, samples);
 
 julia> interpolated = evaluate(itp, [0.6; 0.6])
 1-element Vector{Float64}:
- 0.6105036860019827
+ 0.6105036860019828
 ```
 
 If we instead want to use nearest neighbor interpolation:
@@ -71,8 +71,8 @@ gridded = reshape(interpolated, n, n)
 # output
 
 5×5 Matrix{Float64}:
- -2.22045e-16  0.108133  0.236473  0.370317  0.5     
-  0.108133     0.226333  0.361499  0.497542  0.62459 
+ -1.11022e-16  0.108133  0.236473  0.370317  0.5
+  0.108133     0.226333  0.361499  0.497542  0.62459
   0.236473     0.361499  0.5       0.635589  0.758248
   0.370317     0.497542  0.635589  0.768751  0.886774
   0.5          0.62459   0.758248  0.886774  1.0
