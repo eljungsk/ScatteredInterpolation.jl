@@ -1,9 +1,15 @@
 module ScatteredInterpolation
 
-using Distances, NearestNeighbors, Combinatorics, LinearAlgebra
+using   Distances,
+        NearestNeighbors,
+        Combinatorics,
+        LinearAlgebra,
+        Delaunay,
+        StaticArrays,
+        Bernstein
 
-export interpolate,
-    evaluate
+export  interpolate,
+        evaluate
 
 abstract type ScatteredInterpolant end
 abstract type InterpolationMethod end
@@ -11,6 +17,7 @@ abstract type InterpolationMethod end
 include("./rbf.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
+include("./linear.jl")
 
 
 # Fallback method for the case of just one point
