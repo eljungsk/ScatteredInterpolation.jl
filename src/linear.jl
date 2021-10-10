@@ -19,7 +19,7 @@ function interpolate(m::Linear,
             samples::AbstractArray{<:Number, N}) where {N}
 
     # Delaunay.jl requires Float64 for the points at the moment
-    @assert eltype(points) == Float64 "Linear interpolation is only supported for Float64 point coordinates"
+    eltype(points) == Float64 || throw(ArgumentError("Linear interpolation is only supported for Float64 point coordinates"))
 
     dim = size(points, 1)
     spoints = copy_svec(Float64, points, Val(dim))
@@ -46,6 +46,9 @@ function evaluate(itp::LinearInterpolant, points::AbstractArray{<:Real, 2})
     T = StaticArrays.arithmetic_closure(eltype(itp.samples[1]))
 
     dim = size(itp.samples[1], 1) - 1
+    pointsDim = size(points, 1)
+    dim == pointsDim || throw(DimensionMismatch("got points in dimension $pointsDim but expected $dim."))
+
     spoints = copy_svec(eltype(points), points, Val(dim))
 
     m = length(spoints)
@@ -71,7 +74,7 @@ function find_simplex(itp, point)
         end
     end
 
-    error("Data out of range at $point. Extrapolation is not supported.")
+    throw(DomainError(point, "Extrapolation is not supported."))
 end
 
 # Helper function to copy the points array into a vector of SVector.
