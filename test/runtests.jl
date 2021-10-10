@@ -11,3 +11,4 @@ end
 include("rbf.jl")
 include("idw.jl")
 include("nearestNeighbor.jl")
+include("linear.jl")
