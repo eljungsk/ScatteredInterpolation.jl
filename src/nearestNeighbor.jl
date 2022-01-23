@@ -2,7 +2,7 @@
 export NearestNeighbor
 
 """
-    NearestNeigbor()
+    NearestNeighbor()
 
 Nearest neighbor interpolation.
 
