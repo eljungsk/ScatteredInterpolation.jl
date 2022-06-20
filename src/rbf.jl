@@ -185,7 +185,7 @@ end
 function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialBasisFunction,
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
-                     metric = Euclidean(), returnRBFmatrix::Bool = false,
+                     metric = Euclidean(), returnRBFmatrix::Bool = false, linsolve = nothing,
                      smooth::Union{S, AbstractVector{S}} = false) where {N} where {S<:Number}
 
     #hinder smooth from being set to true and interpreted as the value 1 
@@ -198,7 +198,7 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
     A = evaluateRBF!(A, rbf, smooth)
 
     # Solve for the weights
-    itp = solveForWeights(A, points, samples, rbf, metric)
+    itp = solveForWeights(A, points, samples, rbf, metric; linsolve)
 
     # Create and return an interpolation object
     if returnRBFmatrix    # Return matrix A
@@ -245,13 +245,15 @@ end
 
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
-                                    metric)
-    w = A\samples
-    RBFInterpolant(w, points, rbf, metric)
+                                    metric; linsolve)
+    prob = LinearProblem(A, samples)
+    sol = solve(prob, linsolve)
+
+    RBFInterpolant(sol.u, points, rbf, metric)
 end
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: Union{GeneralizedRadialBasisFunction, RadialBasisFunction},
-                                    metric)
+                                    metric; linsolve)
     # Use the maximum degree among the generalized RBF:s
     P = getPolynomial(rbf, points)
 
