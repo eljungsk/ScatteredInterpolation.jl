@@ -39,6 +39,7 @@ radialBasisFunctions = (Gaussian(2),
 
         @test r.(data) ≈ f.(data)
 
+        offset = 2e-4
         for points in (arrayPoints, adjointPoints)
             itp = interpolate(r, points, data)
 
@@ -46,7 +47,7 @@ radialBasisFunctions = (Gaussian(2),
             # close when evaluating near the sampling points
             ev = evaluate(itp, points)
             @test ev ≈ data
-            ev = evaluate(itp, points .+ 0.001*randn(size(points)))
+            ev = evaluate(itp, points .+ offset)
             @test all(isapprox.(data, ev, atol = 1e-2))
         end
     end
