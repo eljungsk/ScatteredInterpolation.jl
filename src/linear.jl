@@ -66,15 +66,33 @@ end
 # Find the simplex containing the point to interpolate, and return the barycentric coordinates
 function find_simplex(itp, point)
 
-    for (i, bs) in enumerate(itp.barycentric_setup)
-        coord = cartesian2barycentric(bs, point)
+    coord = simplex_search(itp, point, 0.0)
+    if coord !== nothing
+        return coord
+    end
 
-        if all(coord .≥ 0) && all(coord .≤ 1)
-            return (i, coord)
-        end
+    # Look again, but this time with a small tolerance to allow for rounding errors at the
+    # edge of the domain.
+    coord = simplex_search(itp, point, 5*eps())
+    if coord !== nothing
+        return coord
     end
 
     throw(DomainError(point, "Extrapolation is not supported."))
+end
+
+# Find the simplex containing the point to interpolate, and return the barycentric coordinates
+# Use a tolerance to allow for some rounding error at the edge of the domain.
+@inline function simplex_search(itp, point, tol)
+
+    for (i, bs) in enumerate(itp.barycentric_setup)
+        coord = cartesian2barycentric(bs, point)
+
+        if all(coord .≥ -tol) && all(coord .≤ 1 + 2*tol)
+            return (i, coord)
+        end
+    end
+    return nothing
 end
 
 # Helper function to copy the points array into a vector of SVector.
