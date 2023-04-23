@@ -10,7 +10,7 @@ Nearest neighbor interpolation.
 struct NearestNeighbor <: InterpolationMethod end
 
 struct NearestNeighborInterpolant{T, TT} <: ScatteredInterpolant
-    data::Array{T}
+    data::AbstractArray{T}
     tree::TT
 end
 
