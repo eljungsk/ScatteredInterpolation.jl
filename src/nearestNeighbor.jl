@@ -9,8 +9,8 @@ Nearest neighbor interpolation.
 """
 struct NearestNeighbor <: InterpolationMethod end
 
-struct NearestNeighborInterpolant{T, TT} <: ScatteredInterpolant
-    data::AbstractArray{T}
+struct NearestNeighborInterpolant{T, TT} <: ScatteredInterpolant where {T<:AbstractArray}
+    data::T
     tree::TT
 end
 
