@@ -39,15 +39,18 @@ radialBasisFunctions = (Gaussian(2),
 
         @test r.(data) ≈ f.(data)
 
-        for points in (arrayPoints, adjointPoints)
-            itp = interpolate(r, points, data)
+        offset = 2e-4
+        for linsolve in (nothing, IterativeSolversJL_GMRES())
+            for points in (arrayPoints, adjointPoints)
+                itp = interpolate(r, points, data; linsolve = linsolve)
 
-            # Check that we get back the original data at the sample points and that we get
-            # close when evaluating near the sampling points
-            ev = evaluate(itp, points)
-            @test ev ≈ data
-            ev = evaluate(itp, points .+ 0.001*randn(size(points)))
-            @test all(isapprox.(data, ev, atol = 1e-2))
+                # Check that we get back the original data at the sample points and that we get
+                # close when evaluating near the sampling points
+                ev = evaluate(itp, points)
+                @test ev ≈ data
+                ev = evaluate(itp, points .+ offset)
+                @test all(isapprox.(data, ev, atol = 1e-2))
+            end
         end
     end
 

@@ -7,16 +7,17 @@ Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 
 [compat]
 Combinatorics = "1"
 Distances = "0.9,0.10"
 NearestNeighbors = "0.4"
-julia = "1"
+LinearSolve = "1"
+julia = "1.6"
 
 [extras]
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Random"]
+test = ["Test"]

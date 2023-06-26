@@ -1,12 +1,4 @@
-using ScatteredInterpolation, Random
-
-Random.seed!(2)
-
-if VERSION < v"0.7-"
-    using Base.Test
-else
-    using Test
-end
+using ScatteredInterpolation, Test, LinearSolve
 
 include("rbf.jl")
 include("idw.jl")
