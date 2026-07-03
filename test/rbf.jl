@@ -52,6 +52,25 @@ radialBasisFunctions = (Gaussian(2),
         @test_throws AssertionError GeneralizedPolyharmonic(-1, 2)
     end
 
+    @testset "Solve helpers" begin
+        A = [4.0 1.0; 1.0 3.0]
+        cache = ScatteredInterpolation._initsolve(A, nothing)
+
+        b = [1.0, 2.0]
+        x = ScatteredInterpolation._solve!(cache, b)
+        @test A * x ≈ b
+
+        # Reuse the same cache (and its factorization) for a new RHS
+        b2 = [3.0, 4.0]
+        x2 = ScatteredInterpolation._solve!(cache, b2)
+        @test A * x2 ≈ b2
+
+        # Matrix RHS solved column by column
+        B = [1.0 3.0; 2.0 4.0]
+        X = ScatteredInterpolation._solve!(cache, B)
+        @test A * X ≈ B
+    end
+
     @testset "Polyharmonic polynomial reproduction" begin
         # A plain Polyharmonic/ThinPlate system is only conditionally positive definite:
         # its RBF matrix has a zero diagonal and is indefinite, and it does NOT reproduce

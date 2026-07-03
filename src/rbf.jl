@@ -268,6 +268,26 @@ end
     return A
 end
 
+# --- LinearSolve helpers -------------------------------------------------------
+# Build a reusable LinearSolve cache for matrix `A` and algorithm `alg`
+# (`nothing` selects LinearSolve's default algorithm). The factorization is
+# computed on the first solve and reused for subsequent right-hand sides.
+_initsolve(A, alg) = init(LinearProblem(A, zeros(eltype(A), size(A, 1))), alg)
+
+# Point the cache at a new right-hand side without invalidating the cached
+# factorization, then return the cache for chaining.
+function _setb!(cache, b)
+    cache.b = b
+    return cache
+end
+
+# Solve `A * x = b` for a vector RHS, reusing the cache's factorization.
+_solve!(cache, b::AbstractVector) = copy(solve!(_setb!(cache, b)).u)
+
+# Solve `A * X = B` for a matrix RHS, column by column, reusing the factorization.
+_solve!(cache, B::AbstractMatrix) =
+    reduce(hcat, (_solve!(cache, B[:, j]) for j in axes(B, 2)))
+
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
                                     metric)
