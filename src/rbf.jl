@@ -211,7 +211,8 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
                      points::AbstractArray{<:Real,2},
                      samples::AbstractArray{<:Number,N};
                      metric = Euclidean(), returnRBFmatrix::Bool = false,
-                     smooth::Union{S, AbstractVector{S}} = false) where {N} where {S<:Number}
+                     smooth::Union{S, AbstractVector{S}} = false,
+                     linsolve = nothing) where {N} where {S<:Number}
 
     #hinder smooth from being set to true and interpreted as the value 1 
     @assert smooth != true "set the smoothing value as a number or vector of numbers"
@@ -223,7 +224,7 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
     A = evaluateRBF!(A, rbf, smooth)
 
     # Solve for the weights
-    itp = solveForWeights(A, points, samples, rbf, metric)
+    itp = solveForWeights(A, points, samples, rbf, metric; linsolve = linsolve)
 
     # Create and return an interpolation object
     if returnRBFmatrix    # Return matrix A
@@ -275,8 +276,12 @@ end
 _initsolve(A, alg) = init(LinearProblem(A, zeros(eltype(A), size(A, 1))), alg)
 
 # Point the cache at a new right-hand side without invalidating the cached
-# factorization, then return the cache for chaining.
+# factorization, then return the cache for chaining. LinearSolve's cache does not
+# itself validate the RHS length against A, so check explicitly here (matching the
+# DimensionMismatch that `A \ b` would throw for a mismatched RHS).
 function _setb!(cache, b)
+    size(b, 1) == size(cache.A, 1) || throw(DimensionMismatch(
+        "second dimension of A, $(size(cache.A, 1)), does not match length of b, $(size(b, 1))"))
     cache.b = b
     return cache
 end
@@ -290,23 +295,29 @@ _solve!(cache, B::AbstractMatrix) =
 
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
-                                    metric)
-    w = A\samples
+                                    metric; linsolve = nothing)
+    cache = _initsolve(A, linsolve)
+    w = _solve!(cache, samples)
     RBFInterpolant(w, points, rbf, metric)
 end
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: Union{GeneralizedRadialBasisFunction, RadialBasisFunction},
-                                    metric)
+                                    metric; linsolve = nothing)
     # Use the maximum degree among the generalized RBF:s
     P = getPolynomial(rbf, points)
 
-    # Solve for the weights and polynomial coefficients
-    # We end up with a blocked system, so we don't have to form the full matrix
-    Af = factorize(A)
-    B = -P'*(Af\P)
-    E = B\(P'*(Af\samples))
+    # Blocked (Schur-complement) system. One reusable cache factorizes A once and
+    # is reused for every RHS (P, samples, and the final combined RHS); the small
+    # npoly×npoly Schur system uses LinearSolve's default algorithm.
+    cacheA = _initsolve(A, linsolve)
+    AinvP  = _solve!(cacheA, P)
+    Ainvs  = _solve!(cacheA, samples)
 
-    w = Af\(samples + P*E)
+    B = -P' * AinvP
+    cacheB = _initsolve(B, nothing)
+    E = _solve!(cacheB, P' * Ainvs)
+
+    w = _solve!(cacheA, samples + P * E)
     λ = -E
 
     GeneralizedRBFInterpolant(w, λ, points, rbf, metric)
