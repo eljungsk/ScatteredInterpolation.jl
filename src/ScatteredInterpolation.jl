@@ -24,7 +24,7 @@ function evaluate(itp::ScatteredInterpolant, points::AbstractArray{<:Real, 1})
 end
 
 """
-    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false; smooth = false)
+    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false, smooth = false)
 
 Create an interpolation of the data in `samples` sampled at the locations defined in
 `points` based on the interpolation method `method`. `metric` is any of the metrics defined

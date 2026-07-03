@@ -29,25 +29,25 @@ coefficients.
   * [`Multiquadratic`](@ref)
 
     ```math
-    ϕ(r) = \sqrt{1 + (ɛr)^2}
+    ϕ(r) = \sqrt{1 + (εr)^2}
     ```
 
   * [`InverseMultiquadratic`](@ref)
 
     ```math
-    ϕ(r) = \frac{1}{\sqrt{1 + (ɛr)^2}}
+    ϕ(r) = \frac{1}{\sqrt{1 + (εr)^2}}
     ```
 
   * [`Gaussian`](@ref)
 
     ```math
-    ϕ(r) = e^{-(ɛr)^2}
+    ϕ(r) = e^{-(εr)^2}
     ```
 
   * [`InverseQuadratic`](@ref)
 
     ```math
-    ϕ(r) = \frac{1}{1 + (ɛr)^2}
+    ϕ(r) = \frac{1}{1 + (εr)^2}
     ```
 
   * [`Polyharmonic`](@ref) spline
@@ -70,7 +70,7 @@ coefficients.
   * [`GeneralizedMultiquadratic`](@ref)
 
     ```math
-    ϕ(r) = \left(1 + (ɛr)^2\right)^\beta
+    ϕ(r) = \left(1 + (εr)^2\right)^\beta
     ```
     The generalzized multiquadratic results in a positive definite system for polynomials of
     `degree` ``m \geq \lceil\beta\rceil``.

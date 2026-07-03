@@ -9,7 +9,7 @@ Nearest neighbor interpolation.
 """
 struct NearestNeighbor <: InterpolationMethod end
 
-struct NearestNeighborInterpolant{T, TT} <: ScatteredInterpolant where {T<:AbstractArray}
+struct NearestNeighborInterpolant{T <: AbstractArray, TT} <: ScatteredInterpolant
     data::T
     tree::TT
 end
@@ -34,16 +34,15 @@ end
 
 function evaluate(itp::NearestNeighborInterpolant, points::AbstractArray{<:Real,2})
 
-    # Get the indices for each points closest neighbor
-    inds, _ = knn(itp.tree, points, 1)
+    # Get the index of each point's closest neighbor
+    inds, _ = nn(itp.tree, points)
 
     m = size(points, 2)
     n = size(itp.data, 2)
     values = zeros(eltype(itp.data), m, n)
 
-    # knn returns a vector of vectors, so we need a loop
     for i in 1:m
-        values[i, :] = itp.data[inds[i][1], :]
+        values[i, :] = itp.data[inds[i], :]
     end
     
     return values
