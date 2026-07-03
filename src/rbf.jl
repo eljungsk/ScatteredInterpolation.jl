@@ -277,11 +277,12 @@ _initsolve(A, alg) = init(LinearProblem(A, zeros(eltype(A), size(A, 1))), alg)
 
 # Point the cache at a new right-hand side without invalidating the cached
 # factorization, then return the cache for chaining. LinearSolve's cache does not
-# itself validate the RHS length against A, so check explicitly here (matching the
-# DimensionMismatch that `A \ b` would throw for a mismatched RHS).
+# itself validate the RHS length against A (it can silently return a wrong-length
+# result), so check explicitly and throw the same `DimensionMismatch` type that
+# `A \ b` throws for a mismatched RHS.
 function _setb!(cache, b)
     size(b, 1) == size(cache.A, 1) || throw(DimensionMismatch(
-        "second dimension of A, $(size(cache.A, 1)), does not match length of b, $(size(b, 1))"))
+        "A has $(size(cache.A, 1)) rows, but the right-hand side has $(size(b, 1))"))
     cache.b = b
     return cache
 end
@@ -290,8 +291,17 @@ end
 _solve!(cache, b::AbstractVector) = copy(solve!(_setb!(cache, b)).u)
 
 # Solve `A * X = B` for a matrix RHS, column by column, reusing the factorization.
-_solve!(cache, B::AbstractMatrix) =
-    reduce(hcat, (_solve!(cache, B[:, j]) for j in axes(B, 2)))
+# The result is preallocated and each solved column is written in place, avoiding
+# the repeated reallocation that `reduce(hcat, ...)` would incur.
+function _solve!(cache, B::AbstractMatrix)
+    x1 = solve!(_setb!(cache, B[:, 1])).u
+    X = Matrix{eltype(x1)}(undef, length(x1), size(B, 2))
+    X[:, 1] = x1
+    for j in 2:size(B, 2)
+        X[:, j] = solve!(_setb!(cache, B[:, j])).u
+    end
+    return X
+end
 
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
