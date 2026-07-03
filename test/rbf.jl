@@ -1,8 +1,18 @@
 
-# Define some points and data in 2D
-arrayPoints = permutedims([0.0 0.0; 0.0 1.0; 0.5 0.5; 1.0 0.0; 1.0 1.0], (2,1))
-adjointPoints = [0.0 0.0; 0.0 1.0; 0.5 0.5; 1.0 0.0; 1.0 1.0]'
-data = [0.0; 0.5; 0.5; 0.5; 1.0]
+# Define some points and data in 2D. At least 6 points in general position are used so
+# that the degree-2 generalized RBFs below have a full-column-rank polynomial block
+# (binomial(2 + 2, 2) = 6 terms); with fewer points the augmented system is singular.
+samplePoints = [0.0  0.0
+                1.0  0.0
+                0.0  1.0
+                1.0  1.0
+                0.5  0.5
+                0.2  0.7
+                0.8  0.3
+                0.35 0.15]
+arrayPoints = permutedims(samplePoints, (2, 1))
+adjointPoints = samplePoints'
+data = [0.0, 0.5, 0.5, 1.0, 0.5, 0.3, 0.7, 0.2]
 
 radialBasisFunctions = (Gaussian(2),
                         Multiquadratic(2),
@@ -52,7 +62,9 @@ radialBasisFunctions = (Gaussian(2),
         query = [0.3; 0.7]
         truth = 2 + 3 * 0.3 - 0.7
 
-        itpGen = interpolate(GeneralizedPolyharmonic(2, 2), pts, linear)
+        # k = 3 (odd) needs a degree >= ceil(k/2) = 2 augmentation; degree 2 reproduces
+        # linear (and quadratic) fields exactly.
+        itpGen = interpolate(GeneralizedPolyharmonic(3, 2), pts, linear)
         @test evaluate(itpGen, query)[1] ≈ truth
 
         itpPlain = interpolate(Polyharmonic(2), pts, linear)
@@ -143,9 +155,11 @@ radialBasisFunctions = (Gaussian(2),
 
     @testset "Mixed RBF Evaluation" for points in (arrayPoints, adjointPoints)
 
-        # One RBF per sample point (must match size(points, 2) == 5, otherwise the last
-        # column of the RBF matrix is left as raw distance and the feature is not exercised)
-        RBFs = [Gaussian(2), Multiquadratic(2), InverseQuadratic(2), InverseMultiquadratic(2), Polyharmonic(2)]
+        # One RBF per sample point (must match size(points, 2), otherwise trailing columns
+        # of the RBF matrix are left as raw distance and the feature is not exercised)
+        RBFs = [Gaussian(2), Multiquadratic(2), InverseQuadratic(2), InverseMultiquadratic(2),
+                Polyharmonic(2), Gaussian(1), Multiquadratic(1), InverseQuadratic(1)]
+        @assert length(RBFs) == size(points, 2)
         itp = interpolate(RBFs, points, data)
 
         # Check that we get back the original data at the sample points
