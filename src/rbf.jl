@@ -293,6 +293,12 @@ _solve!(cache, b::AbstractVector) = copy(solve!(_setb!(cache, b)).u)
 # Solve `A * X = B` for a matrix RHS, column by column, reusing the factorization.
 # The result is preallocated and each solved column is written in place, avoiding
 # the repeated reallocation that `reduce(hcat, ...)` would incur.
+#
+# NOTE: LinearSolve's `solve!` only accepts a vector RHS, so we solve one column at
+# a time. This forfeits the batched BLAS3 (`trsm`) solve that a plain `A \ B` would
+# use, making wide right-hand sides (multi-column samples, or `A \ P` in the
+# generalized path at large `npoly`) slower than a direct factorization. Revisit once
+# LinearSolve.jl 4.0 ships native multiple-RHS batching.
 function _solve!(cache, B::AbstractMatrix)
     x1 = solve!(_setb!(cache, B[:, 1])).u
     X = Matrix{eltype(x1)}(undef, length(x1), size(B, 2))
