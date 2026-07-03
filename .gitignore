@@ -4,5 +4,6 @@
 *.DS_Store
 /Manifest.toml
 /test/coverage/Manifest.toml
+/docs/Manifest.toml
 
 docs/build
