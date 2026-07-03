@@ -159,6 +159,42 @@ radialBasisFunctions = (Gaussian(2),
         @test ev ≈ multiData
     end
 
+    @testset "Linear solver algorithms" begin
+        # `nothing` and direct factorizations reach machine precision; iterative
+        # solvers only converge to a tolerance, so check them with a looser atol.
+        directAlgs   = (nothing, LUFactorization())
+        iterativeAlgs = (IterativeSolversJL_GMRES(), KrylovJL_GMRES())
+
+        # A linear field for the generalized-RBF reproduction check
+        linear = [2 + 3 * arrayPoints[1, i] - arrayPoints[2, i] for i in 1:size(arrayPoints, 2)]
+        query  = [0.3; 0.7]
+        truth  = 2 + 3 * 0.3 - 0.7
+
+        # Multi-column (matrix RHS) data — the regression guard for the old breakage
+        multiData = hcat(data, 2 .* data, -data)
+
+        @testset "algorithm = $(alg === nothing ? "default" : nameof(typeof(alg)))" for
+                (alg, tol) in (((a, nothing) for a in directAlgs)...,
+                               ((a, 1e-6) for a in iterativeAlgs)...)
+
+            approxeq(x, y) = tol === nothing ? isapprox(x, y) : isapprox(x, y; atol = tol)
+
+            # Plain RBF reproduces the data at the sample points
+            itp = interpolate(Gaussian(2), arrayPoints, data; linsolve = alg)
+            @test approxeq(evaluate(itp, arrayPoints), data)
+
+            # Generalized RBF reproduces a linear field
+            itpGen = interpolate(GeneralizedPolyharmonic(3, 2), arrayPoints, linear; linsolve = alg)
+            @test approxeq(evaluate(itpGen, query)[1], truth)
+
+            # Multi-column samples: each column recovered independently (matrix RHS)
+            itpMulti = interpolate(Gaussian(2), arrayPoints, multiData; linsolve = alg)
+            ev = evaluate(itpMulti, arrayPoints)
+            @test size(ev) == size(multiData)
+            @test approxeq(ev, multiData)
+        end
+    end
+
     @testset "Metric" for points in (arrayPoints, adjointPoints)
         r = Gaussian(2)
 

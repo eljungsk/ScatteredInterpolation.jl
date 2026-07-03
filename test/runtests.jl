@@ -1,4 +1,4 @@
-using ScatteredInterpolation, Test, LinearAlgebra
+using ScatteredInterpolation, Test, LinearAlgebra, LinearSolve, IterativeSolvers
 
 # Import metrics explicitly: `using Distances` would also bring in `Distances.evaluate`,
 # which clashes with `ScatteredInterpolation.evaluate` and shadows it out of scope.
