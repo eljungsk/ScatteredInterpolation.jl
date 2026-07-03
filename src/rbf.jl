@@ -18,17 +18,28 @@ export  Gaussian,
 for rbf in (:Gaussian,
             :Multiquadratic,
             :InverseQuadratic,
-            :InverseMultiquadratic,
-            :Polyharmonic)
+            :InverseMultiquadratic)
     @eval begin
-        struct $rbf{T} <: RadialBasisFunction where T <: Real
-            ɛ::T    
+        struct $rbf{T <: Real} <: RadialBasisFunction
+            ε::T
         end
 
         # Define default constructors
         $rbf() = $rbf(1)
     end
 end
+
+# Polyharmonic is defined outside the loop so its constructor can validate the order once,
+# at construction time, rather than on every scalar evaluation.
+struct Polyharmonic{T <: Integer} <: RadialBasisFunction
+    k::T
+    function Polyharmonic{T}(k) where {T <: Integer}
+        @assert k > 0 "Polyharmonic order must be positive"
+        new{T}(convert(T, k))
+    end
+end
+Polyharmonic(k::T) where {T <: Integer} = Polyharmonic{T}(k)
+Polyharmonic() = Polyharmonic(1)
 
 # Generalized RBF:s
 struct GeneralizedMultiquadratic{T<:Real, S<:Real, U<:Integer} <: GeneralizedRadialBasisFunction
@@ -40,51 +51,57 @@ end
 struct GeneralizedPolyharmonic{S<:Integer, U<:Integer} <: GeneralizedRadialBasisFunction
     k::S
     degree::U
+    function GeneralizedPolyharmonic{S, U}(k, degree) where {S <: Integer, U <: Integer}
+        @assert k > 0 "Polyharmonic order k must be positive"
+        new{S, U}(convert(S, k), convert(U, degree))
+    end
 end
+GeneralizedPolyharmonic(k::S, degree::U) where {S <: Integer, U <: Integer} =
+    GeneralizedPolyharmonic{S, U}(k, degree)
 
 @doc "
-    Gaussian(ɛ = 1)
+    Gaussian(ε = 1)
 
 Define a Gaussian Radial Basis Function
 
 ```math
-ϕ(r) = e^{-(ɛr)^2}
+ϕ(r) = e^{-(εr)^2}
 ```
 " Gaussian
-(rbf::Gaussian)(r) = exp(-(rbf.ɛ*r)^2) 
+(rbf::Gaussian)(r) = exp(-(rbf.ε*r)^2) 
 
 @doc "
-    Multiquadratic(ɛ = 1)
+    Multiquadratic(ε = 1)
 
 Define a Multiquadratic Radial Basis Function
 
 ```math
-ϕ(r) = \\sqrt{1 + (ɛr)^2}
+ϕ(r) = \\sqrt{1 + (εr)^2}
 ```
 " Multiquadratic
-(rbf::Multiquadratic)(r) = (sqrt(1 + (rbf.ɛ*r)^2))
+(rbf::Multiquadratic)(r) = (sqrt(1 + (rbf.ε*r)^2))
 
 @doc "
-    InverseQuadratic(ɛ = 1)
+    InverseQuadratic(ε = 1)
 
 Define an Inverse Quadratic Radial Basis Function
 
 ```math
-ϕ(r) = \\frac{1}{1 + (ɛr)^2}
+ϕ(r) = \\frac{1}{1 + (εr)^2}
 ```
 " InverseQuadratic
-(rbf::InverseQuadratic)(r) = (1/(1 + (rbf.ɛ*r)^2))
+(rbf::InverseQuadratic)(r) = (1/(1 + (rbf.ε*r)^2))
 
 @doc "
-    InverseMultiquadratic(ɛ = 1)
+    InverseMultiquadratic(ε = 1)
 
 Define an Inverse Multiquadratic Radial Basis Function
 
 ```math
-ϕ(r) = \\frac{1}{\\sqrt{1 + (ɛr)^2}}
+ϕ(r) = \\frac{1}{\\sqrt{1 + (εr)^2}}
 ```
 " InverseMultiquadratic
-(rbf::InverseMultiquadratic)(r) = (1/sqrt(1 + (rbf.ɛ*r)^2))
+(rbf::InverseMultiquadratic)(r) = (1/sqrt(1 + (rbf.ε*r)^2))
 
 @doc "
     Polyharmonic(k = 1)
@@ -96,15 +113,21 @@ Define a Polyharmonic Spline Radial Basis Function
 \\\\
 ϕ(r) = r^k ln(r), k = 2, 4, 6, ...
 ```
+
+Polyharmonic splines are only *conditionally* positive definite. The plain interpolation
+matrix has a zero diagonal (``ϕ(0) = 0``) and is indefinite, so the system is not
+guaranteed to be solvable and the interpolant does not reproduce polynomial trends. For a
+well-posed system that also reproduces low-order polynomials, use
+[`GeneralizedPolyharmonic`](@ref), which augments the system with a polynomial term.
 " Polyharmonic
-function (rbf::Polyharmonic{T})(r) where T <: Integer
-    @assert rbf.ɛ > 0
+function (rbf::Polyharmonic)(r)
+    # Order positivity and integrality are enforced by the constructor
 
     # Distinguish odd and even cases
-    expr = if rbf.ɛ % 2 == 0
-        (r > 0 ? r^rbf.ɛ*log(r) : 0.0)
+    expr = if rbf.k % 2 == 0
+        (r > 0 ? r^rbf.k*log(r) : zero(float(r)))
     else
-        (r^rbf.ɛ)
+        (r^rbf.k)
     end
 
     expr
@@ -117,19 +140,21 @@ Define a Thin Plate Spline Radial Basis Function
 
 ```math
 ϕ(r) = r^2 ln(r)
-``` 
+```
 
-This is a shorthand for `Polyharmonic(2)`.
+This is a shorthand for `Polyharmonic(2)`. As with [`Polyharmonic`](@ref), the plain
+thin plate system is only conditionally positive definite; use
+[`GeneralizedPolyharmonic`](@ref) for a well-posed system with polynomial reproduction.
 " ThinPlate
 ThinPlate() = Polyharmonic(2)
 
 @doc "
-    GeneralizedMultiquadratic(ɛ, β, degree)
+    GeneralizedMultiquadratic(ε, β, degree)
 
 Define a generalized Multiquadratic Radial Basis Function
 
 ```math
-ϕ(r) = (1 + (ɛ*r)^2)^β
+ϕ(r) = (1 + (ε*r)^2)^β
 ```
 Results in a positive definite system for a 'degree' of ⌈β⌉ or higher.
 
@@ -151,11 +176,11 @@ Results in a positive definite system for a 'degree' of ⌈k/2⌉ or higher for 
 and of exactly k + 1 for k = 2, 4, 6, ...
 " GeneralizedPolyharmonic
 function (rbf::GeneralizedPolyharmonic)(r)
-    @assert rbf.k > 0
+    # Order positivity is enforced by the constructor
 
     # Distinguish odd and even cases
     expr = if rbf.k % 2 == 0
-        (r > 0 ? r^rbf.k*log(r) : 0.0)
+        (r > 0 ? r^rbf.k*log(r) : zero(float(r)))
     else
         (r^rbf.k)
     end
@@ -165,7 +190,7 @@ end
 
 abstract type RadialBasisInterpolant <: ScatteredInterpolant end
 
-struct RBFInterpolant{T1, T2, F, M} <: RadialBasisInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
+struct RBFInterpolant{T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}, F, M} <: RadialBasisInterpolant
 
     w::T1
     points::T2
@@ -173,7 +198,7 @@ struct RBFInterpolant{T1, T2, F, M} <: RadialBasisInterpolant where {T1 <: Abstr
     metric::M
 end
 
-struct GeneralizedRBFInterpolant{T1, T2, F, M} <: RadialBasisInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
+struct GeneralizedRBFInterpolant{T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}, F, M} <: RadialBasisInterpolant
 
     w::T1
     λ::T1
@@ -261,7 +286,7 @@ end
     B = -P'*(Af\P)
     E = B\(P'*(Af\samples))
 
-    w = A\(I*samples + P*E)
+    w = Af\(samples + P*E)
     λ = -E
 
     GeneralizedRBFInterpolant(w, λ, points, rbf, metric)
@@ -302,14 +327,12 @@ function generateMultivariatePolynomial(points::AbstractArray{<:Real, 2}, degree
 
     # Start with the lowest orders and work upwards
     position = 2
-    while position <= nTerms
-        for order = 1:degree
-            for combination in with_replacement_combinations(1:nDimensions, order)
-                for var in combination
-                    P[:, position] .*= points[var, :]
-                end
-                position += 1
+    for order = 1:degree
+        for combination in with_replacement_combinations(1:nDimensions, order)
+            for var in combination
+                P[:, position] .*= points[var, :]
             end
+            position += 1
         end
     end
 

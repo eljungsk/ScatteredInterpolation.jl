@@ -7,12 +7,12 @@ export Shepard
 
 Standard Shepard interpolation with power parameter `P`.
 """
-struct Shepard{T} <: ShepardType where T <: Real
+struct Shepard{T <: Real} <: ShepardType
     P::T
 end
 Shepard() = Shepard(2)
 
-struct ShepardInterpolant{T1, T2, F, M} <: ScatteredInterpolant where {T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}}
+struct ShepardInterpolant{T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}, F, M} <: ScatteredInterpolant
 
     data::T1
     points::T2
@@ -40,12 +40,12 @@ function evaluate(itp::ShepardInterpolant, points::AbstractArray{<:Real,2})
     values = zeros(eltype(itp.data), m, n)
     for i = 1:m
 
-        d_col = d[:,i]
+        d_col = @view d[:, i]
 
-        # If an interpolation point coincide with a sampling point, just return the 
+        # If an interpolation point coincides with a sampling point, just return the
         # original data. Otherwise, compute distance-weighted sum
-        if !all(r > 0 for r in d_col)
-            ind = findfirst(x -> x ≈ 0.0, d_col)
+        ind = findfirst(iszero, d_col)
+        if ind !== nothing
             values[i,:] = itp.data[ind, :]
         else
             values[i,:] = evaluatePoint(itp.idw, itp.points, itp.data, d_col)
@@ -62,6 +62,6 @@ function evaluatePoint(idw::Shepard,
                        d::AbstractVector) where {N}
 
     # Compute weigths and return the weighted sum
-    w = 1.0./(d.^idw.P)
+    w = 1 ./ d.^idw.P
     value = sum(w.*data, dims = 1)./sum(w)
 end
