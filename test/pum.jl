@@ -33,26 +33,27 @@ kroneckerpoints(d, n; offset = 0) =
         @test collect(c) ≈ collect(grid.origin) .+ 0.5 .* collect(grid.spacing)
     end
 
-    @testset "assignpatches covers all points" begin
-        pts = kroneckerpoints(2, 400)
+    @testset "assignpatches covers all points, $d dimensions" for d in (1, 2, 3, 6)
+        n = 400
+        pts = kroneckerpoints(d, n)
         grid = buildgrid(pts, 80, 1.5)
         patchpoints, centers, cellpatches = assignpatches(pts, grid)
         P = length(patchpoints)
-        @test size(centers) == (2, P)
+        @test size(centers) == (d, P)
         @test length(cellpatches) == prod(grid.ncells)
         # Every point is in at least one patch
-        covered = falses(400)
+        covered = falses(n)
         for idxs in patchpoints, i in idxs
             covered[i] = true
         end
         @test all(covered)
         # Patch point lists are exactly the points within radius of the center
         for p in 1:P
-            member = falses(400)
+            member = falses(n)
             member[patchpoints[p]] .= true
-            for i in 1:400
-                d = sqrt(sum(abs2, pts[:, i] .- centers[:, p]))
-                @test member[i] == (d <= grid.radius)
+            for i in 1:n
+                dist = sqrt(sum(abs2, pts[:, i] .- centers[:, p]))
+                @test member[i] == (dist <= grid.radius)
             end
         end
         # cellpatches is conservative: every patch whose ball intersects a cell's box
@@ -62,7 +63,7 @@ kroneckerpoints(d, n; offset = 0) =
             for p in 1:P
                 # Distance from the patch center to the cell box
                 dist2 = 0.0
-                for i in 1:2
+                for i in 1:d
                     lo = grid.origin[i] + (ci[i] - 1) * grid.spacing[i]
                     hi = grid.origin[i] + ci[i] * grid.spacing[i]
                     dist2 += max(lo - centers[i, p], 0.0, centers[i, p] - hi)^2
@@ -80,15 +81,23 @@ kroneckerpoints(d, n; offset = 0) =
         gridF = buildgrid(flat, 10, 1.5)
         @test all(s -> s > 0, gridF.spacing)
         @test gridF.ncells[2] == 1
-        @test gridF.radius > 0
-        # Radius excludes the flat dimension's artificial spacing
-        @test gridF.radius ≈ 1.5 * gridF.spacing[1] / 2
+        # Radius includes the flat dimension's artificial unit spacing, which
+        # compensates the half-cell center offset in that dimension.
+        @test gridF.radius ≈ 1.5 * sqrt(gridF.spacing[1]^2 + 1) / 2
+        patchpointsF, _, _ = assignpatches(flat, gridF)
+        coveredF = falses(50)
+        for idxs in patchpointsF, i in idxs
+            coveredF[i] = true
+        end
+        @test all(coveredF)
 
-        # All points coincident
-        same = fill(0.3, 2, 5)
-        gridS = buildgrid(same, 10, 1.5)
-        @test gridS.radius > 0
-        patchpointsS, _, _ = assignpatches(same, gridS)
-        @test sort(reduce(vcat, patchpointsS)) ⊇ 1:5
+        # All points coincident, low and high dimension
+        for dd in (2, 6)
+            same = fill(0.3, dd, 5)
+            gridS = buildgrid(same, 10, 1.5)
+            @test gridS.radius > 0
+            patchpointsS, _, _ = assignpatches(same, gridS)
+            @test sort(reduce(vcat, patchpointsS)) ⊇ 1:5
+        end
     end
 end

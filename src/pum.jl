@@ -30,23 +30,23 @@ function buildgrid(points::AbstractMatrix{T}, pointsperpatch::Integer,
             spacing[i] = extent / nside
         else
             # Flat dimension: a single cell of arbitrary positive size, so index
-            # arithmetic stays finite. Excluded from the patch radius below.
+            # arithmetic stays finite.
             ncells[i] = 1
             spacing[i] = one(T)
         end
     end
 
-    # Patch radius: overlap × half cell diagonal, over non-flat dimensions only, so
-    # an artificial flat-dimension spacing cannot inflate the patches.
+    # Patch radius: overlap × half cell diagonal over all dimensions. Flat dimensions
+    # contribute their artificial unit spacing, which exactly compensates the
+    # half-cell offset centerof gives patch centers in those dimensions (a data point
+    # there sits 0.5·spacing from the center); excluding them would leave flat data
+    # uncovered by every patch. diag2 > 0 always, since every dimension contributes
+    # either a real spacing² or 1.
     diag2 = zero(T)
     for i in 1:d
-        if hi[i] > lo[i]
-            diag2 += spacing[i]^2
-        end
+        diag2 += spacing[i]^2
     end
     radius = T(overlap) * sqrt(diag2) / 2
-    # All points coincident: a single patch with any positive radius
-    radius > 0 || (radius = one(T))
 
     PatchGrid{T, d}(Tuple(lo), Tuple(spacing), Tuple(ncells), radius)
 end
