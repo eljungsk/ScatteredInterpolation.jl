@@ -355,11 +355,14 @@ function addpoints!(itp::PartitionOfUnityInterpolant{T, D},
     newpts = Matrix{T}(points)
     nnew = size(newpts, 2)
 
-    # The patch grid is fixed at build time: reject points outside the bounding box.
+    # The patch grid is fixed at build time: reject points outside the bounding box
+    # of the data. The box is computed from the stored points rather than from the
+    # grid, whose flat dimensions carry an artificial unit spacing that would
+    # otherwise admit off-plane points.
+    lo = vec(minimum(itp.points, dims = 2))
+    hi = vec(maximum(itp.points, dims = 2))
     for q in 1:nnew, i in 1:D
-        lo = grid.origin[i]
-        hi = lo + grid.ncells[i] * grid.spacing[i]
-        lo <= newpts[i, q] <= hi || throw(ArgumentError(
+        lo[i] <= newpts[i, q] <= hi[i] || throw(ArgumentError(
             "new point $q lies outside the bounding box of the original data; the " *
             "patch grid is fixed at construction — rebuild with interpolate"))
     end

@@ -231,6 +231,10 @@ end
         itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
         out = evaluate(itp, reshape([2.0, 2.0], 2, 1))
         @test all(isfinite, out)
+        # The fallback value is exactly the nearest patch's local extrapolation
+        dists = vec(sqrt.(sum(abs2, itp.centers .- [2.0, 2.0]; dims = 1)))
+        pnear = argmin(dists)
+        @test out[1] ≈ evaluate(itp.locals[pnear], reshape([2.0, 2.0], 2, 1))[1]
         # Single-point vector form (dispatches through the generic reshape fallback)
         @test evaluate(itp, [0.5, 0.5])[1] ≈ evaluate(itp, reshape([0.5, 0.5], 2, 1))[1]
     end
@@ -343,5 +347,11 @@ end
         # Non-PUM interpolant
         nnitp = interpolate(NearestNeighbor(), base, basevals)
         @test_throws ArgumentError addpoints!(nnitp, reshape([0.5, 0.5], 2, 1), [1.0])
+        # Flat dimension: off-plane points are outside the (degenerate) bounding box
+        flatpts = vcat(kroneckerpoints(1, 60), fill(0.5, 1, 60))
+        flatvals = [sinpi(x[1]) for x in eachcol(flatpts)]
+        itpf = interpolate(PartitionOfUnity(Gaussian(2); pointsperpatch = 15),
+                           flatpts, flatvals)
+        @test_throws ArgumentError addpoints!(itpf, reshape([0.5, 0.9], 2, 1), [1.0])
     end
 end
