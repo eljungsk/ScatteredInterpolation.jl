@@ -66,15 +66,6 @@ function buildgrid(points::AbstractMatrix{T}, pointsperpatch::Integer,
     PatchGrid{T, d}(Tuple(lo), Tuple(spacing), Tuple(ncells), radius)
 end
 
-# Grid cell containing x, clamped to the grid (queries outside the bounding box map
-# to the nearest boundary cell).
-@inline function cellof(grid::PatchGrid{T, D}, x) where {T, D}
-    CartesianIndex(ntuple(
-        i -> clamp(floor(Int, (x[i] - grid.origin[i]) / grid.spacing[i]) + 1,
-                   1, grid.ncells[i]),
-        Val(D)))
-end
-
 # Center of grid cell ci.
 @inline function centerof(grid::PatchGrid{T, D}, ci::CartesianIndex{D}) where {T, D}
     ntuple(i -> grid.origin[i] + (ci[i] - T(0.5)) * grid.spacing[i], Val(D))
@@ -226,4 +217,88 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     PartitionOfUnityInterpolant(grid, patchpoints, locals, centers, KDTree(centers),
                                 weight, pts, collect(samples), pum,
                                 smooth, linsolve, metric)
+end
+
+function evaluate(itp::PartitionOfUnityInterpolant{T, D},
+                  points::AbstractArray{<:Real, 2}) where {T, D}
+
+    size(points, 1) == D || throw(DimensionMismatch(
+        "the interpolant was built in $D dimensions, but the evaluation points " *
+        "have dimension $(size(points, 1))"))
+
+    grid = itp.grid
+    P = length(itp.locals)
+    nq = size(points, 2)
+    m = size(itp.samples, 2)
+    Tw = float(promote_type(eltype(points), T))
+    Tout = promote_type(Tw, eltype(itp.samples))
+
+    # Pass 1: per query, find the covering patches with one batched range query
+    # against the patch-center tree, then compute raw PU weights, grouped by patch so
+    # pass 2 can evaluate each local interpolant on one batched block.
+    candidates = inrange(itp.centertree, Matrix{T}(points), grid.radius)
+    patchq = [Int[] for _ in 1:P]
+    patchw = [Tw[] for _ in 1:P]
+    wsum = zeros(Tw, nq)
+    for q in 1:nq
+        x = view(points, :, q)
+        for p in candidates[q]
+            r2 = zero(Tw)
+            for i in 1:D
+                r2 += abs2(Tw(x[i]) - itp.centers[i, p])
+            end
+            r = sqrt(r2)
+            r < grid.radius || continue
+            ω = Tw(itp.weight(r / grid.radius))
+            ω > 0 || continue
+            push!(patchq[p], q)
+            push!(patchw[p], ω)
+            wsum[q] += ω
+        end
+    end
+
+    # Pass 2 (threaded, BLAS pinned like the build): one batched evaluation per
+    # patch — GEMM-shaped work with no shared writes. Local evaluate returns a
+    # Vector for vector samples; normalize to a matrix so the scatter below is
+    # shape-agnostic.
+    results = Vector{Matrix{Tout}}(undef, P)
+    withpinnedblas() do
+        Threads.@threads for p in 1:P
+            if isempty(patchq[p])
+                results[p] = Matrix{Tout}(undef, 0, m)
+            else
+                v = evaluate(itp.locals[p], points[:, patchq[p]])
+                results[p] = Matrix{Tout}(reshape(v, length(patchq[p]), m))
+            end
+        end
+    end
+
+    # Pass 3 (sequential): scatter-accumulate weighted patch results. Queries covered
+    # by several patches receive several contributions — keeping this phase serial
+    # avoids write races without per-thread output copies, and its cost is only
+    # O(query–patch pairs).
+    out = zeros(Tout, nq, m)
+    for p in 1:P
+        qs = patchq[p]
+        ws = patchw[p]
+        R = results[p]
+        for (i, q) in enumerate(qs)
+            @views out[q, :] .+= ws[i] .* R[i, :]
+        end
+    end
+
+    # Normalize the partition of unity; queries not covered by any patch (outside the
+    # bounding box, or in a region that held no data) fall back to the nearest
+    # patch's local interpolant. This is extrapolation and documented as such.
+    for q in 1:nq
+        if wsum[q] > 0
+            @views out[q, :] ./= wsum[q]
+        else
+            p, _ = nn(itp.centertree, Vector{T}(view(points, :, q)))
+            v = evaluate(itp.locals[p], Matrix{T}(reshape(points[:, q], D, 1)))
+            @views out[q, :] .= vec(v)
+        end
+    end
+
+    itp.samples isa AbstractVector ? vec(out) : out
 end

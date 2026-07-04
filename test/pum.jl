@@ -1,4 +1,4 @@
-using ScatteredInterpolation: PatchGrid, buildgrid, cellof, centerof, assignpatches
+using ScatteredInterpolation: PatchGrid, buildgrid, centerof, assignpatches
 
 # Deterministic low-discrepancy points in [0,1]^d (Kronecker sequence). RNG-free so the
 # tests are reproducible across Julia versions, and duplicate-free unlike periodic
@@ -20,15 +20,9 @@ kroneckerpoints(d, n; offset = 0) =
         @test grid.radius ≈ 1.5 * sqrt(sum(abs2, grid.spacing)) / 2
     end
 
-    @testset "cell and center helpers" begin
+    @testset "center helper" begin
         pts = kroneckerpoints(2, 400)
         grid = buildgrid(pts, 80, 1.5)
-        # A point inside cell (1,1): just above the origin
-        x = collect(grid.origin) .+ 0.25 .* collect(grid.spacing)
-        @test cellof(grid, x) == CartesianIndex(1, 1)
-        # Points outside the bounding box clamp to boundary cells
-        @test cellof(grid, [-10.0, -10.0]) == CartesianIndex(1, 1)
-        @test cellof(grid, [10.0, 10.0]) == CartesianIndex(5, 5)
         c = centerof(grid, CartesianIndex(1, 1))
         @test collect(c) ≈ collect(grid.origin) .+ 0.5 .* collect(grid.spacing)
     end
@@ -153,5 +147,120 @@ end
                                                 smooth = true)
         @test_throws DimensionMismatch interpolate(PartitionOfUnity(Gaussian()), pts,
                                                    ones(49))
+    end
+end
+
+@testset "PartitionOfUnity evaluation" begin
+
+    @testset "Exactness at nodes, $d dimensions" for d in 1:6
+        n = 200
+        pts = kroneckerpoints(d, n)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2); pointsperpatch = 40), pts, vals)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-6
+    end
+
+    @testset "Exactness with kernel $(typeof(kernel))" for kernel in (
+            Gaussian(2), InverseMultiquadratic(2),
+            GeneralizedMultiquadratic(1, 1/2, 2), Wendland(2, 1))
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(kernel; pointsperpatch = 60), pts, vals)
+        # atol = 1e-5, not 1e-6: `≈` on arrays compares the 2-norm of the residual
+        # over all 300 points, not elementwise. GeneralizedMultiquadratic's per-patch
+        # solve has ~1e-7 pointwise error (same order as the dense global RBF fit with
+        # this kernel — verified independent of PUM), which a 300-point 2-norm inflates
+        # past 1e-6; the other three kernels here are 1-6 orders of magnitude tighter.
+        @test evaluate(itp, pts) ≈ vals atol = 1e-5
+    end
+
+    @testset "Accuracy vs dense global RBF" begin
+        pts = kroneckerpoints(2, 400)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        qpts = kroneckerpoints(2, 137; offset = 1000) .* 0.9 .+ 0.05
+        truevals = [prod(sinpi, x) for x in eachcol(qpts)]
+
+        dense = interpolate(Gaussian(2), pts, vals)
+        pum = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        pumvals = evaluate(pum, qpts)
+        @test maximum(abs, pumvals - truevals) < 1e-2
+        @test maximum(abs, pumvals - evaluate(dense, qpts)) < 1e-2
+    end
+
+    @testset "Matrix samples and vector samples" begin
+        pts = kroneckerpoints(2, 300)
+        v1 = [prod(sinpi, x) for x in eachcol(pts)]
+        vals = [v1 2 .* v1]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        out = evaluate(itp, pts)
+        @test out isa AbstractMatrix
+        @test size(out) == (300, 2)
+        @test out[:, 2] ≈ 2 .* out[:, 1] atol = 1e-8
+        @test out[:, 1] ≈ v1 atol = 1e-6
+
+        itpv = interpolate(PartitionOfUnity(Gaussian(2)), pts, v1)
+        @test evaluate(itpv, pts) isa AbstractVector
+    end
+
+    @testset "Smoothing" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals; smooth = 1e-2)
+        ev = evaluate(itp, pts)
+        @test maximum(abs, ev - vals) > 1e-8   # no longer interpolating
+        @test maximum(abs, ev - vals) < 0.1    # but still close
+    end
+
+    @testset "C1 continuity across patch boundaries" begin
+        pts = kroneckerpoints(2, 400)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        xs = range(0.05, 0.95; length = 401)
+        h = step(xs)
+        line = vcat(collect(xs)', fill(0.5, length(xs))')
+        v = evaluate(itp, line)
+        g = diff(v) ./ h
+        # A C¹ function has successive derivative estimates differing by O(h);
+        # a kink at a patch boundary would appear as an O(1) jump.
+        @test maximum(abs, diff(g)) < 0.05
+    end
+
+    @testset "Uncovered queries fall back to nearest patch" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        out = evaluate(itp, reshape([2.0, 2.0], 2, 1))
+        @test all(isfinite, out)
+        # Single-point vector form (dispatches through the generic reshape fallback)
+        @test evaluate(itp, [0.5, 0.5])[1] ≈ evaluate(itp, reshape([0.5, 0.5], 2, 1))[1]
+    end
+
+    @testset "Deterministic under repeated evaluation" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        q = kroneckerpoints(2, 100; offset = 500)
+        @test evaluate(itp, q) == evaluate(itp, q)
+    end
+
+    @testset "Tiny patches (isolated points)" begin
+        pts = [0.0 0.01 0.02 5.0
+               0.0 0.01 0.02 5.0]
+        vals = [1.0, 2.0, 3.0, 4.0]
+        itp = interpolate(PartitionOfUnity(Gaussian(); pointsperpatch = 2), pts, vals)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-8
+    end
+
+    @testset "Flat dimension" begin
+        pts = vcat(kroneckerpoints(1, 60), fill(0.5, 1, 60))
+        vals = [sinpi(x[1]) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2); pointsperpatch = 15), pts, vals)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-6
+    end
+
+    @testset "Evaluation dimension mismatch" begin
+        pts = kroneckerpoints(2, 50)
+        itp = interpolate(PartitionOfUnity(Gaussian()), pts, ones(50))
+        @test_throws DimensionMismatch evaluate(itp, kroneckerpoints(3, 5))
     end
 end
