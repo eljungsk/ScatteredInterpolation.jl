@@ -288,3 +288,60 @@ end
         @test_throws DimensionMismatch evaluate(itp, kroneckerpoints(3, 5))
     end
 end
+
+@testset "addpoints!" begin
+    # Base set: 280 points; added set: 20 points strictly inside the base bounding
+    # box. Sizes are chosen so the volume-calibrated per-side cell count is 4 for
+    # both 280 and 300 points — the rebuild then uses the identical patch grid.
+    base = kroneckerpoints(2, 280)
+    basevals = [prod(sinpi, x) for x in eachcol(base)]
+    added = kroneckerpoints(2, 20; offset = 2000) .* 0.8 .+ 0.1
+    addedvals = [prod(sinpi, x) for x in eachcol(added)]
+
+    @testset "Insertion matches full rebuild" begin
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), base, basevals)
+        ret = addpoints!(itp, added, addedvals)
+        @test ret === itp
+        rebuilt = interpolate(PartitionOfUnity(Gaussian(2)),
+                              hcat(base, added), vcat(basevals, addedvals))
+        @test itp.grid.ncells == rebuilt.grid.ncells   # sanity: same grid
+        # Compare away from the boundary: interior patches hold identical point sets
+        # in both interpolants. (Sparse boundary patches are topped up by knn over
+        # 280 vs 300 candidate points respectively and may legitimately differ.)
+        q = kroneckerpoints(2, 97; offset = 3000) .* 0.2 .+ 0.4
+        @test evaluate(itp, q) ≈ evaluate(rebuilt, q) atol = 1e-6
+        # New points are interpolated exactly
+        @test evaluate(itp, added) ≈ addedvals atol = 1e-6
+        @test size(itp.points, 2) == 300
+    end
+
+    @testset "Matrix samples" begin
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), base, [basevals 2 .* basevals])
+        addpoints!(itp, added, [addedvals 2 .* addedvals])
+        out = evaluate(itp, added)
+        @test out[:, 1] ≈ addedvals atol = 1e-6
+        @test out[:, 2] ≈ 2 .* addedvals atol = 1e-6
+    end
+
+    @testset "Errors" begin
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), base, basevals)
+        # Outside the original bounding box
+        @test_throws ArgumentError addpoints!(itp, reshape([5.0, 5.0], 2, 1), [1.0])
+        # Wrong point dimension
+        @test_throws DimensionMismatch addpoints!(itp, reshape([0.5, 0.5, 0.5], 3, 1),
+                                                  [1.0])
+        # Point/sample count mismatch
+        @test_throws DimensionMismatch addpoints!(itp, reshape([0.5, 0.5], 2, 1),
+                                                  [1.0, 2.0])
+        # Sample shape mismatch (matrix onto vector-sample interpolant)
+        @test_throws DimensionMismatch addpoints!(itp, reshape([0.5, 0.5], 2, 1),
+                                                  reshape([1.0, 2.0], 1, 2))
+        # Smoothing vector stored at build time
+        itps = interpolate(PartitionOfUnity(Gaussian(2)), base, basevals;
+                           smooth = fill(1e-3, 280))
+        @test_throws ArgumentError addpoints!(itps, reshape([0.5, 0.5], 2, 1), [1.0])
+        # Non-PUM interpolant
+        nnitp = interpolate(NearestNeighbor(), base, basevals)
+        @test_throws ArgumentError addpoints!(nnitp, reshape([0.5, 0.5], 2, 1), [1.0])
+    end
+end

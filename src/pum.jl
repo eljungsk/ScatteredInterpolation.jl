@@ -318,3 +318,91 @@ function evaluate(itp::PartitionOfUnityInterpolant{T, D},
 
     itp.samples isa AbstractVector ? vec(out) : out
 end
+
+"""
+    addpoints!(itp, points, samples)
+
+Add new data points to an existing [`PartitionOfUnity`](@ref) interpolant without a
+full rebuild: only the local systems of the patches covering the new points are
+re-solved (using the same `smooth` and `linsolve` settings as the original build).
+
+The patch grid is fixed at construction, so every new point must lie inside the
+bounding box of the original data and inside at least one existing patch; otherwise an
+`ArgumentError` suggests rebuilding with `interpolate`. Interpolants built with a
+per-point smoothing *vector* are not supported (the smoothing values of the new points
+would be ambiguous) — rebuild instead.
+
+`points` and `samples` follow the same layout as in [`interpolate`](@ref); `samples`
+must have the same second dimension as the original sample data. Returns `itp`.
+"""
+function addpoints!(itp::PartitionOfUnityInterpolant{T, D},
+                    points::AbstractArray{<:Real, 2},
+                    samples::AbstractArray{<:Number}) where {T, D}
+
+    size(points, 1) == D || throw(DimensionMismatch(
+        "the interpolant was built in $D dimensions, but the new points have " *
+        "dimension $(size(points, 1))"))
+    size(points, 2) == size(samples, 1) || throw(DimensionMismatch(
+        "got $(size(points, 2)) new points but $(size(samples, 1)) new sample rows"))
+    size(samples, 2) == size(itp.samples, 2) || throw(DimensionMismatch(
+        "new samples have $(size(samples, 2)) columns but the original samples " *
+        "have $(size(itp.samples, 2))"))
+    itp.smooth isa AbstractVector && throw(ArgumentError(
+        "addpoints! does not support interpolants built with a per-point smoothing " *
+        "vector; rebuild with interpolate instead"))
+
+    grid = itp.grid
+    newpts = Matrix{T}(points)
+    nnew = size(newpts, 2)
+
+    # The patch grid is fixed at build time: reject points outside the bounding box.
+    for q in 1:nnew, i in 1:D
+        lo = grid.origin[i]
+        hi = lo + grid.ncells[i] * grid.spacing[i]
+        lo <= newpts[i, q] <= hi || throw(ArgumentError(
+            "new point $q lies outside the bounding box of the original data; the " *
+            "patch grid is fixed at construction — rebuild with interpolate"))
+    end
+
+    # Find the covering patches of every new point before mutating any state, so a
+    # coverage error cannot leave the interpolant half-updated. The range query
+    # against the patch-center tree returns exactly the patches whose ball contains
+    # the point.
+    covering = inrange(itp.centertree, newpts, grid.radius)
+    for q in 1:nnew
+        isempty(covering[q]) && throw(ArgumentError(
+            "new point $q is not covered by any existing patch (that region held no " *
+            "data when the interpolant was built) — rebuild with interpolate"))
+    end
+
+    # Append the data and update patch membership. Adding the point to *every*
+    # covering patch preserves exact interpolation at the new points.
+    n0 = size(itp.points, 2)
+    itp.points = hcat(itp.points, newpts)
+    itp.samples = vcat(itp.samples, collect(samples))
+    affected = Set{Int}()
+    for q in 1:nnew, p in covering[q]
+        push!(itp.patchpoints[p], n0 + q)
+        push!(affected, p)
+    end
+
+    # Re-solve only the affected local systems (threaded and BLAS-pinned, like the
+    # build).
+    aff = collect(affected)
+    withpinnedblas() do
+        Threads.@threads for k in eachindex(aff)
+            p = aff[k]
+            idxs = itp.patchpoints[p]
+            itp.locals[p] = interpolate(itp.method.method, itp.points[:, idxs],
+                                        patchsamples(itp.samples, idxs);
+                                        metric = itp.metric, smooth = itp.smooth,
+                                        linsolve = itp.linsolve)
+        end
+    end
+
+    itp
+end
+
+addpoints!(itp::ScatteredInterpolant, points, samples) = throw(ArgumentError(
+    "addpoints! is only supported for PartitionOfUnity interpolants; rebuild with " *
+    "interpolate instead"))
