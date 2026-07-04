@@ -1,6 +1,7 @@
 module ScatteredInterpolation
 
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
+import KernelFunctions
 
 export interpolate,
     evaluate
@@ -9,6 +10,7 @@ abstract type ScatteredInterpolant end
 abstract type InterpolationMethod end
 
 include("./rbf.jl")
+include("./wendland.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
 
