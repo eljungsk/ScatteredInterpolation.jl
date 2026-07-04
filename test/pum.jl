@@ -12,8 +12,8 @@ kroneckerpoints(d, n; offset = 0) =
     @testset "buildgrid basic properties" begin
         pts = kroneckerpoints(2, 400)
         grid = buildgrid(pts, 80, 1.5)
-        # 400 / 80 = 5 cells wanted → ceil(5^(1/2)) = 3 per side
-        @test grid.ncells == (3, 3)
+        # Volume-calibrated cell count: kd = π·(1.5·√2/2)² ≈ 3.534 → ceil(√(400·kd/80)) = 5
+        @test grid.ncells == (5, 5)
         @test all(s -> s > 0, grid.spacing)
         @test collect(grid.origin) ≈ vec(minimum(pts, dims = 2))
         # radius = overlap × half cell diagonal
@@ -28,7 +28,7 @@ kroneckerpoints(d, n; offset = 0) =
         @test cellof(grid, x) == CartesianIndex(1, 1)
         # Points outside the bounding box clamp to boundary cells
         @test cellof(grid, [-10.0, -10.0]) == CartesianIndex(1, 1)
-        @test cellof(grid, [10.0, 10.0]) == CartesianIndex(3, 3)
+        @test cellof(grid, [10.0, 10.0]) == CartesianIndex(5, 5)
         c = centerof(grid, CartesianIndex(1, 1))
         @test collect(c) ≈ collect(grid.origin) .+ 0.5 .* collect(grid.spacing)
     end
@@ -100,6 +100,19 @@ kroneckerpoints(d, n; offset = 0) =
             @test sort(reduce(vcat, patchpointsS)) ⊇ 1:5
         end
     end
+
+    @testset "patch occupancy stays near target" begin
+        for d in (2, 3, 6)
+            n = 4000
+            pts = kroneckerpoints(d, n)
+            grid = buildgrid(pts, 80, 1.5)
+            patchpoints, _, _ = assignpatches(pts, grid)
+            meansize = sum(length, patchpoints) / length(patchpoints)
+            # Mean patch size within a modest factor of the target, independent of d
+            # (boundary patches are clipped, so the mean sits below the interior value)
+            @test 10 <= meansize <= 400
+        end
+    end
 end
 
 @testset "PartitionOfUnity construction" begin
@@ -129,6 +142,20 @@ end
         ipts = [0 1 0 1 2; 0 0 1 1 2]
         itpI = interpolate(PartitionOfUnity(Gaussian()), ipts, [1.0, 2.0, 3.0, 4.0, 5.0])
         @test itpI isa ScatteredInterpolation.PartitionOfUnityInterpolant
+    end
+
+    @testset "Vector smoothing and threaded build determinism" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        sv = fill(1e-3, 300)
+        itp1 = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals; smooth = sv)
+        itp2 = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals; smooth = sv)
+        # Concrete local-interpolant storage and deterministic threaded builds
+        @test isconcretetype(eltype(itp1.locals))
+        @test all(itp1.locals[p].w == itp2.locals[p].w for p in 1:length(itp1.locals))
+        # A uniform smoothing vector matches the equivalent scalar smoothing
+        itp3 = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals; smooth = 1e-3)
+        @test all(itp1.locals[p].w ≈ itp3.locals[p].w for p in 1:length(itp1.locals))
     end
 
     @testset "interpolate argument errors" begin

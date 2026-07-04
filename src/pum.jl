@@ -20,7 +20,22 @@ function buildgrid(points::AbstractMatrix{T}, pointsperpatch::Integer,
     lo = vec(minimum(points, dims = 2))
     hi = vec(maximum(points, dims = 2))
 
-    nside = max(1, ceil(Int, (n / pointsperpatch)^(1 / d)))
+    # Subdivide only the non-flat dimensions, and calibrate the per-side cell count so
+    # the expected number of points in a patch ball matches pointsperpatch: a patch is
+    # a ball of radius overlap·(half cell diagonal), whose volume exceeds a cell's by
+    # kd = V(1) · (overlap·√deff/2)^deff with V(1) the unit-ball volume in deff
+    # dimensions. Without this correction patch occupancy grows geometrically with
+    # the dimension (≈22× the target at d = 6).
+    deff = count(i -> hi[i] > lo[i], 1:d)
+    nside = 1
+    if deff > 0
+        ballvol = 1.0   # unit-ball volume via the recursion V_k = V_{k-2} · 2π/k
+        for k in (iseven(deff) ? 2 : 1):2:deff
+            ballvol *= k == 1 ? 2.0 : 2π / k
+        end
+        kd = ballvol * (Float64(overlap) * sqrt(deff) / 2)^deff
+        nside = max(1, ceil(Int, (n * kd / pointsperpatch)^(1 / deff)))
+    end
     ncells = Vector{Int}(undef, d)
     spacing = Vector{T}(undef, d)
     for i in 1:d
@@ -154,11 +169,12 @@ function PartitionOfUnity(method::AbstractRadialBasisFunction;
 end
 
 mutable struct PartitionOfUnityInterpolant{T <: AbstractFloat, D, S <: AbstractArray,
-                                           W, PU <: PartitionOfUnity, SM, LS, M,
+                                           L <: RadialBasisInterpolant, W,
+                                           PU <: PartitionOfUnity, SM, LS, M,
                                            KT} <: ScatteredInterpolant
     grid::PatchGrid{T, D}
     patchpoints::Vector{Vector{Int}}
-    locals::Vector{RadialBasisInterpolant}
+    locals::Vector{L}
     centers::Matrix{T}
     centertree::KT              # KDTree over patch centers, for uncovered-query fallback
     cellpatches::Vector{Vector{Int}}
@@ -176,6 +192,20 @@ patchsamples(samples::AbstractVector, idxs) = samples[idxs]
 patchsamples(samples::AbstractMatrix, idxs) = samples[idxs, :]
 patchsmooth(smooth::Number, idxs) = smooth
 patchsmooth(smooth::AbstractVector, idxs) = smooth[idxs]
+
+# Run f with BLAS pinned to one thread while our own threads are active: the
+# per-patch systems are small, and nthreads() × BLAS-threads oversubscription only
+# slows them down. Restored afterwards.
+function withpinnedblas(f)
+    Threads.nthreads() == 1 && return f()
+    old = BLAS.get_num_threads()
+    BLAS.set_num_threads(1)
+    try
+        return f()
+    finally
+        BLAS.set_num_threads(old)
+    end
+end
 
 function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
                      samples::AbstractArray{<:Number, N};
@@ -202,12 +232,17 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     # small (~pointsperpatch), where single-threaded BLAS per task is appropriate.
     P = length(patchpoints)
     locals = Vector{RadialBasisInterpolant}(undef, P)
-    Threads.@threads for p in 1:P
-        idxs = patchpoints[p]
-        locals[p] = interpolate(pum.method, pts[:, idxs], patchsamples(samples, idxs);
-                                metric = metric, smooth = patchsmooth(smooth, idxs),
-                                linsolve = linsolve)
+    withpinnedblas() do
+        Threads.@threads for p in 1:P
+            idxs = patchpoints[p]
+            locals[p] = interpolate(pum.method, pts[:, idxs], patchsamples(samples, idxs);
+                                    metric = metric, smooth = patchsmooth(smooth, idxs),
+                                    linsolve = linsolve)
+        end
     end
+    # Narrow to the concrete local-interpolant type (homogeneous in practice) so the
+    # evaluation hot path dispatches statically.
+    locals = [l for l in locals]
 
     PartitionOfUnityInterpolant(grid, patchpoints, locals, centers, KDTree(centers),
                                 cellpatches, weight, pts, collect(samples), pum,
