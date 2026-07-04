@@ -83,22 +83,19 @@ end
 # Assign data points to patches. Returns:
 # - patchpoints: per non-empty patch, sorted indices of the data points it contains
 # - centers:     d × P matrix of the non-empty patch centers
-# - cellpatches: per grid cell, the patches whose ball intersects that cell — the
-#                candidate list used for O(1) patch lookup during evaluation
+# (Patch lookup during evaluation/insertion uses a KDTree over these centers.)
 function assignpatches(points::Matrix{T}, grid::PatchGrid{T, D}) where {T, D}
     tree = KDTree(points)
     cells = CartesianIndices(grid.ncells)
 
     patchpoints = Vector{Vector{Int}}()
     centerlist = Vector{NTuple{D, T}}()
-    patchcell = Vector{CartesianIndex{D}}()
     for ci in cells
         c = centerof(grid, ci)
         idxs = inrange(tree, collect(c), grid.radius)
         isempty(idxs) && continue   # empty patches are dropped
         push!(patchpoints, sort!(idxs))
         push!(centerlist, c)
-        push!(patchcell, ci)
     end
 
     P = length(patchpoints)
@@ -107,24 +104,7 @@ function assignpatches(points::Matrix{T}, grid::PatchGrid{T, D}) where {T, D}
         centers[i, p] = centerlist[p][i]
     end
 
-    # For each patch, register it in every cell its ball can reach. A ball of radius
-    # R centered in a cell reaches at most ceil(R / spacing) cells away per dimension
-    # (conservative). Together with center-in-cell this over-covers, which is safe:
-    # evaluation re-checks the exact distance.
-    stencil = ntuple(i -> ceil(Int, grid.radius / grid.spacing[i]), Val(D))
-    cellpatches = [Int[] for _ in 1:length(cells)]
-    lin = LinearIndices(cells)
-    for p in 1:P
-        ci = patchcell[p]
-        ranges = ntuple(
-            i -> max(1, ci[i] - stencil[i]):min(grid.ncells[i], ci[i] + stencil[i]),
-            Val(D))
-        for cj in CartesianIndices(ranges)
-            push!(cellpatches[lin[cj]], p)
-        end
-    end
-
-    patchpoints, centers, cellpatches
+    patchpoints, centers
 end
 
 export PartitionOfUnity, addpoints!
@@ -177,7 +157,6 @@ mutable struct PartitionOfUnityInterpolant{T <: AbstractFloat, D, S <: AbstractA
     locals::Vector{L}
     centers::Matrix{T}
     centertree::KT              # KDTree over patch centers, for uncovered-query fallback
-    cellpatches::Vector{Vector{Int}}
     weight::W
     points::Matrix{T}
     samples::S
@@ -225,7 +204,7 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     d = size(pts, 1)
 
     grid = buildgrid(pts, pum.pointsperpatch, pum.overlap)
-    patchpoints, centers, cellpatches = assignpatches(pts, grid)
+    patchpoints, centers = assignpatches(pts, grid)
     weight = pum.weight === nothing ? Wendland(d, 1) : pum.weight
 
     # Local solves are independent — thread across patches. Each per-patch system is
@@ -245,6 +224,6 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     locals = [l for l in locals]
 
     PartitionOfUnityInterpolant(grid, patchpoints, locals, centers, KDTree(centers),
-                                cellpatches, weight, pts, collect(samples), pum,
+                                weight, pts, collect(samples), pum,
                                 smooth, linsolve, metric)
 end

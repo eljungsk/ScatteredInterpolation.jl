@@ -37,42 +37,28 @@ kroneckerpoints(d, n; offset = 0) =
         n = 400
         pts = kroneckerpoints(d, n)
         grid = buildgrid(pts, 80, 1.5)
-        patchpoints, centers, cellpatches = assignpatches(pts, grid)
+        patchpoints, centers = assignpatches(pts, grid)
         P = length(patchpoints)
         @test size(centers) == (d, P)
-        @test length(cellpatches) == prod(grid.ncells)
         # Every point is in at least one patch
         covered = falses(n)
         for idxs in patchpoints, i in idxs
             covered[i] = true
         end
         @test all(covered)
-        # Patch point lists are exactly the points within radius of the center
+        # Patch point lists are exactly the points within radius of the center.
+        # Aggregated into one @test per property: a per-pair @test would record
+        # millions of results on the finer calibrated grids and dominate suite time.
+        membershipok = true
         for p in 1:P
             member = falses(n)
             member[patchpoints[p]] .= true
             for i in 1:n
                 dist = sqrt(sum(abs2, pts[:, i] .- centers[:, p]))
-                @test member[i] == (dist <= grid.radius)
+                membershipok &= member[i] == (dist <= grid.radius)
             end
         end
-        # cellpatches is conservative: every patch whose ball intersects a cell's box
-        # is listed for that cell (brute-force check).
-        for ci in CartesianIndices(grid.ncells)
-            li = LinearIndices(CartesianIndices(grid.ncells))[ci]
-            for p in 1:P
-                # Distance from the patch center to the cell box
-                dist2 = 0.0
-                for i in 1:d
-                    lo = grid.origin[i] + (ci[i] - 1) * grid.spacing[i]
-                    hi = grid.origin[i] + ci[i] * grid.spacing[i]
-                    dist2 += max(lo - centers[i, p], 0.0, centers[i, p] - hi)^2
-                end
-                if sqrt(dist2) <= grid.radius
-                    @test p in cellpatches[li]
-                end
-            end
-        end
+        @test membershipok
     end
 
     @testset "degenerate geometry" begin
@@ -84,7 +70,7 @@ kroneckerpoints(d, n; offset = 0) =
         # Radius includes the flat dimension's artificial unit spacing, which
         # compensates the half-cell center offset in that dimension.
         @test gridF.radius ≈ 1.5 * sqrt(gridF.spacing[1]^2 + 1) / 2
-        patchpointsF, _, _ = assignpatches(flat, gridF)
+        patchpointsF, _ = assignpatches(flat, gridF)
         coveredF = falses(50)
         for idxs in patchpointsF, i in idxs
             coveredF[i] = true
@@ -96,7 +82,7 @@ kroneckerpoints(d, n; offset = 0) =
             same = fill(0.3, dd, 5)
             gridS = buildgrid(same, 10, 1.5)
             @test gridS.radius > 0
-            patchpointsS, _, _ = assignpatches(same, gridS)
+            patchpointsS, _ = assignpatches(same, gridS)
             @test sort(reduce(vcat, patchpointsS)) ⊇ 1:5
         end
     end
@@ -106,7 +92,7 @@ kroneckerpoints(d, n; offset = 0) =
             n = 4000
             pts = kroneckerpoints(d, n)
             grid = buildgrid(pts, 80, 1.5)
-            patchpoints, _, _ = assignpatches(pts, grid)
+            patchpoints, _ = assignpatches(pts, grid)
             meansize = sum(length, patchpoints) / length(patchpoints)
             # Mean patch size within a modest factor of the target, independent of d
             # (boundary patches are clipped, so the mean sits below the interior value)
