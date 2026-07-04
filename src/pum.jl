@@ -75,8 +75,8 @@ end
 # - patchpoints: per non-empty patch, sorted indices of the data points it contains
 # - centers:     d × P matrix of the non-empty patch centers
 # (Patch lookup during evaluation/insertion uses a KDTree over these centers.)
-function assignpatches(points::Matrix{T}, grid::PatchGrid{T, D}) where {T, D}
-    tree = KDTree(points)
+function assignpatches(points::Matrix{T}, grid::PatchGrid{T, D},
+                       tree = KDTree(points)) where {T, D}
     cells = CartesianIndices(grid.ncells)
 
     patchpoints = Vector{Vector{Int}}()
@@ -195,8 +195,24 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     d = size(pts, 1)
 
     grid = buildgrid(pts, pum.pointsperpatch, pum.overlap)
-    patchpoints, centers = assignpatches(pts, grid)
+    tree = KDTree(pts)
+    patchpoints, centers = assignpatches(pts, grid, tree)
     weight = pum.weight === nothing ? Wendland(d, 1) : pum.weight
+
+    # Patches near the boundary of the data can end up with few, one-sided points
+    # (their ball sticks out of the data region), and a starved local interpolant
+    # produces wild values in the data-free part of its ball — exactly where its PU
+    # weight is still nonzero. Top such patches up with the nearest data points so
+    # every local system is well fed. Extra members beyond the ball are harmless:
+    # the weights are unchanged, and exactness only requires that every patch whose
+    # ball covers a data point interpolates it.
+    minpts = min(max(2 * (d + 1), pum.pointsperpatch ÷ 2), size(pts, 2))
+    for p in eachindex(patchpoints)
+        if length(patchpoints[p]) < minpts
+            idxs, _ = knn(tree, view(centers, :, p), minpts)
+            patchpoints[p] = sort!(union(patchpoints[p], idxs))
+        end
+    end
 
     # Local solves are independent — thread across patches. Each per-patch system is
     # small (~pointsperpatch), where single-threaded BLAS per task is appropriate.

@@ -258,6 +258,30 @@ end
         @test evaluate(itp, pts) ≈ vals atol = 1e-6
     end
 
+    @testset "Sparse patches are topped up" begin
+        pts = kroneckerpoints(3, 2000)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2)), pts, vals)
+        # minpts = min(max(2(d+1), pointsperpatch ÷ 2), n) = 40 here
+        @test all(idx -> length(idx) >= 40, itp.patchpoints)
+        @test evaluate(itp, pts[:, 1:100]) ≈ vals[1:100] atol = 1e-6
+    end
+
+    @testset "Boundary accuracy with scale-free locals" begin
+        # Regression test: boundary patches used to be starved and one-sided, making
+        # local interpolants blow up in the data-free part of their ball (errors of
+        # O(10³) with polyharmonic locals before the knn top-up).
+        n = 50_000
+        pts = kroneckerpoints(3, n)
+        g(x) = x[1] + sinpi(x[2]) * x[3]
+        vals = [g(x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(GeneralizedPolyharmonic(3, 1)), pts, vals)
+        # Queries spanning the whole box, including near faces and corners
+        qs = kroneckerpoints(3, 5000; offset = 42_000)
+        truevals = [g(x) for x in eachcol(qs)]
+        @test maximum(abs, evaluate(itp, qs) - truevals) < 0.05
+    end
+
     @testset "Evaluation dimension mismatch" begin
         pts = kroneckerpoints(2, 50)
         itp = interpolate(PartitionOfUnity(Gaussian()), pts, ones(50))
