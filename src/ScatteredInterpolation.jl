@@ -11,6 +11,7 @@ abstract type InterpolationMethod end
 
 include("./rbf.jl")
 include("./wendland.jl")
+include("./pum.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
 
