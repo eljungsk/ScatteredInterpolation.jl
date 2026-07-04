@@ -8,6 +8,7 @@ Order   = [:function, :type]
 ```@docs
 interpolate
 evaluate
+addpoints!
 ```
 
 ## Types
@@ -23,6 +24,13 @@ Polyharmonic
 ThinPlate
 GeneralizedMultiquadratic
 GeneralizedPolyharmonic
+Wendland
+```
+
+### Partition of Unity
+
+```@docs
+PartitionOfUnity
 ```
 
 ### Inverse Distance Weighting (Shepard)
