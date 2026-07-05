@@ -395,7 +395,7 @@ function generateMultivariatePolynomial(points::AbstractArray{<:Real, 2}, degree
     for order = 1:degree
         for combination in with_replacement_combinations(1:nDimensions, order)
             for var in combination
-                P[:, position] .*= points[var, :]
+                @views P[:, position] .*= points[var, :]
             end
             position += 1
         end
