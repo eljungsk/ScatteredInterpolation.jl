@@ -1459,3 +1459,15 @@ against.
    point budget can resolve heterogeneous structure at all (3D, empirically
    met at 18.95×), and document the 6D limitation explicitly rather than
    requiring it, or choose a larger n for the 6D case specifically.
+
+**Decision (user, this conversation): budget accepted as-is, conditional on
+documentation.** The user's response: "As long as the performance cost is
+documented, I'm fine with the budget not being met." The original ≤5×
+time-ratio and 6D ≥10× error-ratio criteria are not being retroactively
+declared "met" — they are explicitly waived, in favor of the honestly measured
+numbers above (153.2× time, 3D-only 18.95× error) being documented for anyone
+choosing to enable `tune = :loocv`. Performance cost documented in the
+`PartitionOfUnity` docstring (`src/pum.jl`) and in `docs/src/methods.md`
+(Task 9), both stating the ~150× order-of-magnitude build-time cost and that
+tuning is a targeted tool for genuinely mis-scaled/spatially-varying data, not
+a default-on accuracy upgrade. Task 8 is closed on this basis.

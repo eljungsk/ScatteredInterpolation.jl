@@ -120,10 +120,20 @@ dimension at `interpolate` time.
 
 `tune` selects automatic per-patch shape-parameter tuning: `:none` uses `method` as
 given, while `:loocv` chooses each patch's shape parameter `ε` by exact leave-one-out
-cross-validation (Rippa's method), scanning candidates scaled to the patch's mean
+cross-validation (Rippa's method), searching candidates scaled to the patch's mean
 nearest-neighbor spacing plus the shape parameter stored in `method` itself (used as
 a fallback reference, not ignored); the kernel must have a shape parameter to tune
 (`Polyharmonic`, `ThinPlate` and `GeneralizedPolyharmonic` do not).
+
+**Performance:** `tune = :loocv` is substantially slower to build than `:none` —
+each candidate evaluated costs about as much as solving the whole patch (Rippa's
+formula needs the full diagonal of the inverse, which is the same asymptotic cost
+as the factorization), and several candidates are evaluated per patch. Measured on
+a target-scale benchmark (n = 100,000, 3D): build time increased by roughly two
+orders of magnitude (~150×) relative to `:none`. Only use it where a single fixed
+`ε` is genuinely mis-scaled somewhere in the domain (see the manual for a worked
+example); on data where a well-chosen fixed `ε` is already close to optimal
+everywhere, tuning buys little to no accuracy for a large build-time cost.
 
 Only the `Euclidean` metric is supported. The `smooth` and `linsolve` keywords of
 `interpolate` are forwarded to every per-patch solve. Additional points can be added to
