@@ -10,6 +10,7 @@ abstract type ScatteredInterpolant end
 abstract type InterpolationMethod end
 
 include("./rbf.jl")
+include("./rippa.jl")
 include("./wendland.jl")
 include("./pum.jl")
 include("./idw.jl")
