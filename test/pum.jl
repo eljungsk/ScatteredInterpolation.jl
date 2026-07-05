@@ -1,4 +1,5 @@
-using ScatteredInterpolation: PatchGrid, buildgrid, centerof, assignpatches
+using ScatteredInterpolation: PatchGrid, buildgrid, centerof, assignpatches,
+                              meannndist, tuneshape, LOOCV_CANDIDATES
 
 # Deterministic low-discrepancy points in [0,1]^d (Kronecker sequence). RNG-free so the
 # tests are reproducible across Julia versions, and duplicate-free unlike periodic
@@ -362,5 +363,122 @@ end
         itpf = interpolate(PartitionOfUnity(Gaussian(2); pointsperpatch = 15),
                            flatpts, flatvals)
         @test_throws ArgumentError addpoints!(itpf, reshape([0.5, 0.9], 2, 1), [1.0])
+    end
+end
+
+@testset "LOOCV shape-parameter tuning" begin
+
+    @testset "meannndist" begin
+        # Nearest-neighbor distances: 1 (point 1→2), 1 (2→1), 2 (3→2)
+        pts = [0.0 1.0 3.0; 0.0 0.0 0.0]
+        @test meannndist(pts) ≈ 4 / 3
+        @test meannndist(fill(0.5, 2, 3)) == 0        # coincident
+        @test meannndist(reshape([1.0, 2.0], 2, 1)) == 0   # single point
+    end
+
+    @testset "tuneshape edge cases" begin
+        cmid = LOOCV_CANDIDATES[(length(LOOCV_CANDIDATES) + 1) ÷ 2]
+        # Coincident points: no length scale — kernel returned unchanged
+        k = tuneshape(Gaussian(7), fill(0.5, 2, 4), ones(4), false, Euclidean())
+        @test k === Gaussian(7)
+        # Two points: ε = c_mid / h without scanning
+        pts2 = [0.0 1.0; 0.0 0.0]
+        k2 = tuneshape(Gaussian(7), pts2, [1.0, 2.0], false, Euclidean())
+        @test k2 isa Gaussian
+        @test k2.ε ≈ cmid / 1.0
+    end
+
+    @testset "Tuning never much worse than untuned (no catastrophe)" begin
+        # Rippa's LOOCV score is only reliable within a safe conditioning envelope
+        # (see safeloocvscore); for a smooth function at high point density, the
+        # scale-derived grid can only ever match — not beat — a well-scaled fixed
+        # kernel (the RBF trade-off principle: you cannot out-tune an optimum).
+        # What tuning must never do is make things *much* worse, since a grid
+        # candidate can only override the caller's own kernel by scoring better on
+        # a gated (trustworthy) comparison.
+        n = 5000
+        pts = kroneckerpoints(3, n)
+        g3(x) = sinpi(x[1]) * cospi(x[2]) + x[3]
+        vals = [g3(x) for x in eachcol(pts)]
+        q = kroneckerpoints(3, 500; offset = 100_000) .* 0.9 .+ 0.05
+        truevals = [g3(x) for x in eachcol(q)]
+        untuned = interpolate(PartitionOfUnity(Gaussian()), pts, vals)
+        tuned = interpolate(PartitionOfUnity(Gaussian(); tune = :loocv), pts, vals)
+        euntuned = maximum(abs, evaluate(untuned, q) - truevals)
+        etuned = maximum(abs, evaluate(tuned, q) - truevals)
+        @test etuned < 3 * euntuned
+    end
+
+    @testset "Tuning corrects a badly mis-scaled (too-peaked) kernel" begin
+        # The regime tuning *can* reliably win in: a fixed kernel so peaked it has
+        # decayed to near zero between patch points is easy to detect and safely
+        # correct — the winning candidate is comfortably within the safe
+        # conditioning envelope, unlike the smooth-function/high-density case above.
+        n = 5000
+        pts = kroneckerpoints(3, n)
+        g3(x) = sinpi(x[1]) * cospi(x[2]) + x[3]
+        vals = [g3(x) for x in eachcol(pts)]
+        q = kroneckerpoints(3, 500; offset = 100_000) .* 0.9 .+ 0.05
+        truevals = [g3(x) for x in eachcol(q)]
+        toopeaked = interpolate(PartitionOfUnity(Gaussian(50)), pts, vals)
+        tuned = interpolate(PartitionOfUnity(Gaussian(50); tune = :loocv), pts, vals)
+        etoopeaked = maximum(abs, evaluate(toopeaked, q) - truevals)
+        etuned = maximum(abs, evaluate(tuned, q) - truevals)
+        @test etuned < 0.1 * etoopeaked
+    end
+
+    @testset "Exactness at nodes under tuning, $d dimensions" for d in (2, 3)
+        # Gaussian(2), not the default Gaussian() (ε = 1): node-exactness and
+        # off-node accuracy pull the shape parameter in opposite directions (the
+        # RBF trade-off principle), so this checks that tuning *preserves* node
+        # exactness for an already well-conditioned kernel, not that it can improve
+        # node exactness for a kernel whose good candidates are gated out (that
+        # scenario is covered by the no-catastrophe test above instead).
+        pts = kroneckerpoints(d, 400)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv), pts, vals)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-6
+        # Tuned kernels live on the locals; evaluate needed no changes
+        @test all(l -> l.rbf isa Gaussian, itp.locals)
+    end
+
+    @testset "Matrix samples and smoothing under tuning" begin
+        pts = kroneckerpoints(2, 300)
+        v1 = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv), pts,
+                          [v1 2 .* v1])
+        out = evaluate(itp, pts)
+        @test size(out) == (300, 2)
+        # atol = 1e-5, not 1e-6: Gaussian(2) is well-conditioned but not at machine
+        # precision, and the shared per-patch factorization serving both columns
+        # leaves a small, normal margin above the single-column exactness bound.
+        @test out[:, 1] ≈ v1 atol = 1e-5
+        @test out[:, 2] ≈ 2 .* v1 atol = 1e-5
+
+        itps = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv), pts, v1;
+                           smooth = 1e-3)
+        ev = evaluate(itps, pts)
+        @test maximum(abs, ev - v1) > 1e-8   # no longer interpolating
+        @test maximum(abs, ev - v1) < 0.1    # but still close
+    end
+
+    @testset "Determinism of tuned builds" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp1 = interpolate(PartitionOfUnity(Gaussian(); tune = :loocv), pts, vals)
+        itp2 = interpolate(PartitionOfUnity(Gaussian(); tune = :loocv), pts, vals)
+        @test all(itp1.locals[p].w == itp2.locals[p].w
+                  for p in eachindex(itp1.locals))
+        @test all(itp1.locals[p].rbf.ε == itp2.locals[p].rbf.ε
+                  for p in eachindex(itp1.locals))
+    end
+
+    @testset "Tiny patches under tuning" begin
+        pts = [0.0 0.01 0.02 5.0
+               0.0 0.01 0.02 5.0]
+        vals = [1.0, 2.0, 3.0, 4.0]
+        itp = interpolate(PartitionOfUnity(Gaussian(); tune = :loocv,
+                                           pointsperpatch = 2), pts, vals)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-8
     end
 end

@@ -121,9 +121,9 @@ dimension at `interpolate` time.
 `tune` selects automatic per-patch shape-parameter tuning: `:none` uses `method` as
 given, while `:loocv` chooses each patch's shape parameter `ε` by exact leave-one-out
 cross-validation (Rippa's method), scanning candidates scaled to the patch's mean
-nearest-neighbor spacing. Under `:loocv` the shape parameter stored in `method` is
-ignored, and the kernel must have one (`Polyharmonic`, `ThinPlate` and
-`GeneralizedPolyharmonic` do not).
+nearest-neighbor spacing plus the shape parameter stored in `method` itself (used as
+a fallback reference, not ignored); the kernel must have a shape parameter to tune
+(`Polyharmonic`, `ThinPlate` and `GeneralizedPolyharmonic` do not).
 
 Only the `Euclidean` metric is supported. The `smooth` and `linsolve` keywords of
 `interpolate` are forwarded to every per-patch solve. Additional points can be added to
@@ -191,6 +191,125 @@ function withpinnedblas(f)
     end
 end
 
+# ---- LOOCV shape-parameter tuning (tune = :loocv) --------------------------------
+
+# Shape-parameter candidates are ε = c / h for the patch's mean nearest-neighbor
+# distance h, spanning the flat-to-peaked range in half-octave steps.
+const LOOCV_CANDIDATES = 2.0 .^ (-2:0.5:3)
+
+# Mean nearest-neighbor distance among the patch points; zero when there is no
+# usable length scale (single or all-coincident points). Patch sizes are
+# ~pointsperpatch, so the brute-force O(np²) scan on the already-gathered block is
+# cheaper than building a tree.
+function meannndist(pts::AbstractMatrix{T}) where {T <: AbstractFloat}
+    d, np = size(pts)
+    np < 2 && return zero(T)
+    total = zero(T)
+    for i in 1:np
+        best = typemax(T)
+        for j in 1:np
+            j == i && continue
+            r2 = zero(T)
+            for k in 1:d
+                r2 += abs2(pts[k, i] - pts[k, j])
+            end
+            r2 < best && (best = r2)
+        end
+        total += sqrt(best)
+    end
+    return total / np
+end
+
+# Reciprocal-condition-number gate below which a candidate's LOOCV score is not
+# merely noisy but can be *confidently wrong*: explicit inv() computes diag(A⁻¹) with
+# relative error ~ eps/rcond, so once rcond drops under ~1e-12 the "error" Rippa's
+# formula reports has no correct digits, yet reads as a small, trustworthy-looking
+# number — verified empirically (docs/superpowers/plans/
+# 2026-07-04-loocv-shape-selection.md, Task 5 amendment): at cond(A) ≈ 1e18,
+# inv(A)*b disagreed with A\b by O(1) while both LOOCV scores looked fine. This is
+# not a "somewhat less accurate" regime, it's `A⁻¹` having zero correct digits — no
+# amount of scoring cleverness recovers information that isn't there, so gated-out
+# candidates are simply not scored (Inf), never selected. `rcond` is obtained from
+# the LU factorization via LAPACK gecon! (not Cholesky: Multiquadratic-family
+# kernels are indefinite), which the score computation needs anyway, so the check is
+# nearly free.
+const RCOND_THRESHOLD = 1e-8
+
+# Rippa's LOOCV score, but Inf for any candidate whose reciprocal condition number
+# falls below RCOND_THRESHOLD (see above) rather than trusting a numerically
+# meaningless inv().
+function safeloocvscore(A::AbstractMatrix, samples::AbstractVecOrMat)
+    F = try
+        lu(A)
+    catch err
+        err isa SINGULAR_EXCEPTIONS && return Inf
+        rethrow()
+    end
+    anorm = opnorm(A, 1)
+    rcond = LinearAlgebra.LAPACK.gecon!('1', F.factors, anorm)
+    rcond < RCOND_THRESHOLD && return Inf
+    Ainv = inv(F)
+    W = Ainv * samples
+    return sum(abs2, W ./ diag(Ainv))
+end
+
+# Select the best shape parameter for one patch: score the caller's own kernel with
+# the plain (ungated) Rippa score as the baseline, then let scale-derived grid
+# candidates challenge it — but only through the gated safeloocvscore. A grid
+# candidate replaces the anchor only if it both passes the reliability gate AND
+# scores better than the anchor. This asymmetry is deliberate: the anchor is the
+# kernel the caller (or the untuned path) would use anyway, so it is never rejected
+# for being "unscoreable" — a flat, unscoreable anchor on smooth data typically has
+# an extremely good (tiny) LOO score in exact arithmetic even though inv() cannot
+# certify it, and demanding gate-passing on both sides only lets tuning move away
+# from the caller's kernel when a *trustworthy* alternative is genuinely better (see
+# docs/superpowers/plans/2026-07-04-loocv-shape-selection.md, Task 5 amendment: an
+# earlier design that gated the anchor too let a merely-safe-but-worse grid
+# candidate override a good-but-unscoreable anchor, causing ~250-500x regressions).
+# The distance matrix does not depend on ε and is computed once; each candidate only
+# re-applies the kernel, adds smoothing, and factorizes the small dense system. The
+# final solve of the winner runs through the standard interpolate path afterwards
+# (where the user's linsolve choice applies); candidate scans deliberately use
+# direct factorization instead.
+function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
+                   samples::AbstractVecOrMat, smooth, metric)
+    h = meannndist(pts)
+    h > 0 || return kernel   # no length scale to derive ε from
+    cmid = LOOCV_CANDIDATES[(length(LOOCV_CANDIDATES) + 1) ÷ 2]
+    size(pts, 2) >= 3 || return withshape(kernel, cmid / h)
+
+    R = pairwise(metric, pts, dims = 2)
+    A = similar(R)
+
+    A .= kernel.(R)
+    addSmoothing!(A, smooth)
+    best = loocvscore(A, samples)   # ungated: the anchor is never rejected as unscoreable
+    εbest = kernel.ε
+
+    for c in LOOCV_CANDIDATES
+        ε = c / h
+        ϕ = withshape(kernel, ε)
+        A .= ϕ.(R)
+        addSmoothing!(A, smooth)
+        s = safeloocvscore(A, samples)   # gated: only a trustworthy score may win
+        if s < best
+            best = s
+            εbest = ε
+        end
+    end
+    return withshape(kernel, εbest)
+end
+
+# Solve one patch's local system, tuning the kernel's shape parameter first when
+# requested. Shared by the initial build and addpoints! re-solves.
+function solvelocal(pum::PartitionOfUnity, patchpts, psamples, psmooth, metric,
+                    linsolve)
+    method = pum.tune === :loocv ?
+        tuneshape(pum.method, patchpts, psamples, psmooth, metric) : pum.method
+    interpolate(method, patchpts, psamples;
+                metric = metric, smooth = psmooth, linsolve = linsolve)
+end
+
 function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
                      samples::AbstractArray{<:Number, N};
                      metric = Euclidean(),
@@ -235,9 +354,8 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     withpinnedblas() do
         Threads.@threads for p in 1:P
             idxs = patchpoints[p]
-            locals[p] = interpolate(pum.method, pts[:, idxs], patchsamples(samples, idxs);
-                                    metric = metric, smooth = patchsmooth(smooth, idxs),
-                                    linsolve = linsolve)
+            locals[p] = solvelocal(pum, pts[:, idxs], patchsamples(samples, idxs),
+                                   patchsmooth(smooth, idxs), metric, linsolve)
         end
     end
     # Narrow to the concrete local-interpolant type (homogeneous in practice) so the

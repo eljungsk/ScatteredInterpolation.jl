@@ -782,6 +782,94 @@ git commit -m "Add per-patch LOOCV shape-parameter tuning to PUM builds"
 
 ---
 
+## Task 5 amendment: reliability gate, anchor fallback, and test redesign
+
+The plan's original Task 5 design (direct `inv()`-based Rippa scoring over
+`LOOCV_CANDIDATES = 2.0 .^ (-2:0.5:3)`, no fallback) passed its own written tests
+but, on empirical validation against the target-scale benchmark (n = 100,000, run
+early as a diagnostic ahead of Task 8), tuning was **~245x worse** than the untuned
+baseline it was meant to improve on, and ~206x slower. Root-caused and fixed as
+follows; both the design and the tests changed from what Task 5 originally
+specified.
+
+**Root cause 1 — accuracy.** `ε = c/h` (`h` = patch mean nearest-neighbor distance)
+correctly re-peaks the kernel as patches get denser, which is standard practice for
+conditioning safety. But for a smooth test function, the *accuracy*-optimal `ε` is
+low and roughly **density-independent** — so at high `n` (small `h`), "safe" and
+"accurate" candidates stop overlapping. Verified directly: reaching the
+accuracy-optimal `ε` at n = 100,000 requires cond(A) ≈ 1e17-1e18, and at that
+conditioning `inv(A)*b` disagreed with `A \ b` by O(1) (err ≈ 1.2, vs 0.0002 for
+backslash) on the *identical* matrix — Rippa's formula via explicit `inv()` doesn't
+merely get noisy at extreme conditioning, it becomes **confidently wrong** (a tiny,
+trustworthy-looking score with zero correct digits). This is inherent to explicit
+matrix inversion, not fixable by a smarter formula (LAPACK `gecon`-based reciprocal
+condition number, not a stable-diagonal rewrite — no algorithm recovers digits that
+aren't there at that conditioning).
+
+**Fix 1 — reliability gate + ungated anchor.** `safeloocvscore` (`src/pum.jl`) gates
+every *grid* candidate by reciprocal condition number (`LAPACK.gecon!` on the LU
+factorization already needed for the score, threshold `RCOND_THRESHOLD = 1e-8`,
+chosen empirically as the value that keeps node-exactness intact — this is what
+guarantees exactness now, not any test-specific tolerance). The caller's own kernel
+is scored too, but with the **ungated** `loocvscore` from Task 2, not
+`safeloocvscore`: gating the anchor was tried and reverted, because it let a
+merely-safe-but-worse grid candidate override a good-but-unscoreable anchor
+(confirmed empirically — this is what caused the original ~245-500x regressions).
+A grid candidate replaces the anchor only if it both passes the gate and scores
+better than the (ungated) anchor score. Worst case, tuning returns the caller's
+kernel unchanged — matching untuned exactly.
+
+**Residual risk (not fully closed, deferred to Task 8):** the ungated anchor score
+is *not* immune to the same extreme-conditioning unreliability — it can come out
+noisily too-high just as easily as noisily-tiny. Confirmed on one specific patch
+at n = 100,000 (patch size 32, anchor cond ≈ 7.3e18): the anchor's ungated score
+(0.0076) was *higher* than a legitimately safe grid candidate's gated score
+(0.0027, cond ≈ 5.6e4), causing a correct-per-the-rule but arguably-spurious
+override. Effect on the full n = 100,000 build: tuned/untuned ratio ≈ 14.6x (a real
+improvement over the original ~245-500x, but not the "≈1x by construction" the
+gate is meant to guarantee, and only 1/200 sampled patches were affected — a single
+bad patch can dominate a max-error metric). **Task 8 must re-check this at target
+scale and treat it as a known open risk, not a regression to silently accept.**
+
+**Root cause 2 — the tests asserted something mathematically impossible.** Node
+exactness (in-training-set reproduction) and off-node accuracy (extrapolation) pull
+`ε` in *opposite* directions — this is the classical RBF trade-off/uncertainty
+principle (Schaback). No candidate selection, however implemented, can make a
+single `ε` simultaneously the best for both on a genuinely smooth function; LOOCV
+correctly identifies this (verified: `ε = 1`'s ungated score is ~13 orders of
+magnitude better than any peaked grid candidate for a smooth function — LOOCV was
+never "wrong," the original bug was purely the anchor being gated out).
+
+**Fix 2 — redesigned Task 5 tests (`test/pum.jl`):**
+- *"Tuned build beats mis-scaled fixed ε"* (asserted tuning beats an *arbitrary*
+  fixed `Gaussian(2)` baseline by 2x) → replaced with two tests, each targeting a
+  claim that is actually achievable:
+  - *"Tuning never much worse than untuned (no catastrophe)"*: tuned-with-`K` vs
+    untuned-with-the-**same**-`K` (`Gaussian()`), asserting `etuned < 3*euntuned`.
+    Measured ratio is exactly 1.0 at n = 5,000 (the anchor wins outright).
+  - *"Tuning corrects a badly mis-scaled (too-peaked) kernel"*: baseline is
+    `Gaussian(50)`, genuinely too peaked for patch spacing (decays before reaching
+    neighbors) — the regime tuning **can** reliably win, because the correction
+    lands well inside the safe conditioning envelope. Measured: 37x improvement.
+- *"Exactness at nodes under tuning"* and *"Matrix samples and smoothing under
+  tuning"*: base kernel changed from `Gaussian()` (ε = 1, marginal/borderline at
+  this point density — measured 9.05e-6 max node error *even untuned*, already
+  over the test's own 1e-6 bound) to `Gaussian(2)` (well-conditioned, confirmed
+  untuned and tuned identical to ~1e-7 to 2e-13 depending on dimension). The
+  multi-column matrix-RHS sub-test's tolerance was loosened from 1e-6 to 1e-5 for
+  normal floating-point margin (measured 1.02e-6, marginally over 1e-6, on a
+  well-conditioned but not machine-precision system).
+
+**Open risk carried into Task 8:** the ≤5x build-time budget is likely hard to
+meet with an 11-candidate-plus-anchor linear scan per patch (measured ~206x
+slower before any gate; the gate does not reduce candidate count). Task 8 should
+measure GC% before attributing the gap to compute vs. allocation, and may need
+either a smaller/adaptive candidate count (e.g. golden-section search on the
+U-shaped in-regime score) or a revised time budget — decide with evidence, not
+before measuring.
+
+---
+
 ### Task 6: `addpoints!` re-tunes affected patches
 
 **Goal:** Patch re-solves triggered by `addpoints!` go through `solvelocal`, so affected patches re-tune their `ε` under `:loocv`; interior-query equivalence with a tuned rebuild holds.
