@@ -53,4 +53,15 @@ wendlandData = [0.0, 0.5, 0.5, 1.0, 0.5, 0.3]
         itpSmall = interpolate(Wendland(2, 1; ε = 2.0), wendlandPoints, wendlandData)
         @test evaluate(itpSmall, wendlandPoints) ≈ wendlandData atol = 1e-10
     end
+
+    @testset "Wendland shape parameter traits" begin
+        @test ScatteredInterpolation.hasshape(Wendland(2, 1))
+        w = ScatteredInterpolation.withshape(Wendland(3, 2; ε = 2), 4.0)
+        @test w isa Wendland
+        @test w.ε == 4.0
+        # dim/degree preserved: values match a freshly constructed Wendland(3, 2; ε = 4)
+        ref = Wendland(3, 2; ε = 4)
+        @test all(w(r) ≈ ref(r) for r in 0:0.05:0.3)
+        @test ScatteredInterpolation.support_radius(w) ≈ 0.25
+    end
 end

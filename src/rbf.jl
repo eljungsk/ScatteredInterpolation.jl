@@ -188,6 +188,24 @@ function (rbf::GeneralizedPolyharmonic)(r)
     expr
 end
 
+# --- Shape-parameter traits ------------------------------------------------------
+# Used by the partition of unity method's LOOCV tuning (tune = :loocv): hasshape says
+# whether a kernel has a tunable shape parameter ε, and withshape rebuilds the kernel
+# with a new one, preserving all other parameters. Polyharmonic-family kernels are
+# scale-free and have no shape parameter.
+hasshape(::AbstractRadialBasisFunction) = false
+hasshape(::Union{Gaussian, Multiquadratic, InverseQuadratic, InverseMultiquadratic,
+                 GeneralizedMultiquadratic}) = true
+
+withshape(::Gaussian, ε) = Gaussian(ε)
+withshape(::Multiquadratic, ε) = Multiquadratic(ε)
+withshape(::InverseQuadratic, ε) = InverseQuadratic(ε)
+withshape(::InverseMultiquadratic, ε) = InverseMultiquadratic(ε)
+withshape(k::GeneralizedMultiquadratic, ε) = GeneralizedMultiquadratic(ε, k.β, k.degree)
+
+# (Wendland is defined in src/wendland.jl, which is included after src/rbf.jl — its
+# methods cannot live in this Union.)
+
 abstract type RadialBasisInterpolant <: ScatteredInterpolant end
 
 struct RBFInterpolant{T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}, F, M} <: RadialBasisInterpolant

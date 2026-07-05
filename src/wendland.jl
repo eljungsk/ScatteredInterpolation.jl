@@ -48,3 +48,10 @@ interpolation path (see the RBF-PUM design spec, Future Work).
 """
 support_radius(::AbstractRadialBasisFunction) = Inf
 support_radius(w::Wendland) = 1 / w.ε
+
+# The wrapped PiecewisePolynomialKernel does not depend on ε (ε is applied outside it,
+# in kappa(kernel, ε*r)), so a re-shaped Wendland reuses it directly — dim and degree
+# are preserved without reconstruction. Tuning candidates are always positive, so the
+# public constructor's ε > 0 check is not needed here.
+hasshape(::Wendland) = true
+withshape(w::Wendland, ε) = Wendland(w.kernel, ε)
