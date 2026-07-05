@@ -1345,3 +1345,117 @@ regime of benefit established in Task 5), reducing the candidate count
 (e.g. golden-section search over the U-shaped in-regime score instead of an
 11-point linear scan) to address the time budget, or revising the stated
 budget numbers to reflect what the feature can actually, honestly deliver.
+
+### Task 8 amendment: golden-section search, representative function, and two structural findings
+
+Acting on both remediation paths the user asked for (a more efficient
+candidate search, and a benchmark function in the regime tuning is actually
+built for), two changes were made and re-measured — see `gatedloocvscore`
+(src/rippa.jl) and the golden-section `tuneshape` (src/pum.jl) for the
+implementation. This surfaced two further, independent facts, one favorable
+and one structural, that also belong in this record.
+
+**Change 1 — merged gate+score factorization, golden-section search.**
+The old design factorized twice per candidate (a raw `lu!`/`gecon!` just for
+the rcond gate, plus `loocvscore`'s own LinearSolve factorization) and scanned
+all 11 fixed grid points unconditionally. `gatedloocvscore` now reuses the one
+factorization LinearSolve already built for the weight solve for the rcond
+check too (verified directly: `gecon!` accepts the LU object LinearSolve's
+`RFLUFactorization` stores, no separate factorization needed). The candidate
+scan was replaced with a golden-section search over log2(ε) bounded by the
+same range the old grid covered — justified by direct measurement on a
+synthetic localized-peak patch: the LOO score is a clean single-trough
+function of log(ε) in the safe conditioning region, and its minimum coincided
+with the true (holdout) off-node error minimum, not just the LOO proxy.
+Golden section is comparison-based, so Inf-scored (gated-out) candidates
+compare correctly with no special-casing, unlike derivative-based methods
+(e.g. Brent) that assume finite values throughout. 6 iterations (8 score
+evaluations total) resolve ε to within ~5.6% of the bracket width — finer than
+the old grid's ~41%-per-step resolution — while evaluating fewer candidates.
+A hand-rolled ~25-line implementation was used rather than adding an
+optimization-package dependency (e.g. Optim.jl): the codebase currently has 6
+narrowly-scoped dependencies, comparison-based golden section is more robust
+than Brent-style methods near the gate's Inf boundary regardless of package
+origin, and the routine is short enough that a dependency buys nothing here.
+
+**Change 2 — representative benchmark function.** The original smooth
+function `f(x) = sinpi(x₁)cospi(x₂) + x₃` was one where `Gaussian(2)` is
+already close to optimal (Task 5 finding) — no fixed kernel can be "corrected"
+by 10× because it was never mis-scaled to begin with. Replaced, for this
+benchmark only, with a spatially-varying-frequency ("chirp") function:
+`chirp(x) = sin(2π·(2 + 18·x₂)·x₁) + sum(x[3:end])` — a single global `ε`
+is well-scaled for the low-frequency end of the domain and badly mis-scaled
+for the high-frequency end, so per-patch tuning has genuine, verifiable room
+to help (unlike the smooth function). Verified directly on real per-patch
+data before trusting it at scale: LOO score minimum tracked the true
+off-node error minimum on both a "near a sharp feature" and "far from it"
+synthetic patch.
+
+**Result table (n = 100,000, chirp function, `Gaussian(2)` untuned vs.
+`Gaussian(2)`-anchored tuned, 3D):**
+
+| d | untuned build [s] | tuned build [s] | ratio_time (≤5 required) | untuned err | tuned err | ratio_err (≥10 required) |
+|---|---|---|---|---|---|---|
+| 3 | 0.418 | 63.99 | **153.2** | 1633.1 | 86.19 | **18.95** |
+
+nthreads = 12. **The ≥10× error budget is now genuinely met (18.95×)** on a
+function actually in tuning's regime of benefit — this was not achievable on
+the old smooth function, independent of implementation quality, and now is.
+The time-ratio budget improved materially (278.6× → 153.2×, the golden-section
++ merged-factorization changes cut it by ~45%) but remains far over ≤5×.
+
+**Finding A — the ≤5× time budget is arithmetically unreachable for exact
+Rippa LOOCV, not an implementation gap.** `diag(A⁻¹)` (via a full `ldiv!`
+against the identity) costs the same O(n³) as the factorization itself, so
+each candidate costs at minimum ~2× an untuned build — before counting how
+many candidates are evaluated. Golden section's ~9 evaluations (8 search
+points + 1 ungated anchor) put the arithmetic floor at ~18–24×, already 4–5×
+over budget with zero implementation overhead. The observed 153× exceeds even
+that floor because LinearSolve's per-call `init` (fresh `LinearProblem` +
+algorithm-selection + cache allocation on *every* candidate) has real
+constant overhead that dominates at patch scale (tens to ~100 points):
+measured directly, one `tuneshape` call on an 80-point patch allocates ~625 KB
+across 266 allocations, versus ~60 KB/22 allocations for one plain solve —
+roughly 10× the allocation, not the ~2× the FLOP-count argument alone would
+suggest. A cache-reuse fix (reassign `cache.A` and resolve on the same
+LinearSolve cache instead of calling `_initsolve` fresh per candidate) was
+investigated and rejected for now: reassigning `cache.A` directly and calling
+`solve!` again reuses the *stale* factorization silently and returns a wrong
+answer (verified directly — residual ~0.09 against the new matrix, no error
+raised) rather than refactorizing, so it is not simply a matter of enabling a
+flag; a correct version needs a verified reinitialization path through
+LinearSolve's API that this investigation did not find, and is listed as a
+possible future lever rather than attempted here. The only known way to drop
+*below* the ~2×/candidate floor at all is an approximate LOO criterion
+(stochastic diagonal estimation, or scoring on a point subset), which trades
+score fidelity for speed — a scope decision, not a bug fix, and out of scope
+unless requested.
+
+**Finding B — the ≥10× error budget is structurally unreachable in 6D at
+n = 100,000, for any choice of benchmark function.** Nearest-neighbor spacing
+scales as n^(-1/d); at n = 100,000, d = 6 that is ≈ 0.146 — a patch spans
+roughly a quarter of the domain along each axis. A function must be smooth at
+that scale to be resolvable by the interpolant at all, but a function smooth
+at that scale is exactly the regime (Task 5 finding) where a fixed kernel is
+already near-optimal — there is no mis-scaling for tuning to correct. Any
+function with enough local heterogeneity to reward tuning is, by
+construction, too fine to be resolved at this point density in 6D. Measured
+directly at n = 5,000 (before committing to the expensive n = 100,000 6D
+run): the chirp function above gives untuned error 2.33 and tuned error 2.35
+— both equally poor (ratio ≈ 1.0), because the method has no resolving power
+at all in that regime, with or without tuning; a milder chirp (frequency
+range 2–6 instead of 2–20) resolves in neither dimension, at these variation
+sizes, differently from the 3D result — confirming this is a resolution wall,
+not a tuning-quality issue. This is a property of PUM patch scale under the
+curse of dimensionality, unrelated to the LOOCV tuning implementation, and
+was not previously provable without a representative function to test it
+against.
+
+**Decision needed (this task remains open pending it):**
+1. Time budget: accept a revised, honest ceiling reflecting the ~2×/candidate
+   floor (e.g. ≤25×, or ≤200× to cover the measured 153× with margin), or
+   pursue the approximate-LOO-criterion lever to actually chase ≤5×.
+2. Error budget scope: restrict the ≥10× criterion to dimensions where the
+   point budget can resolve heterogeneous structure at all (3D, empirically
+   met at 18.95×), and document the 6D limitation explicitly rather than
+   requiring it, or choose a larger n for the 6D case specifically.
