@@ -1,0 +1,81 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-04-loocv-shape-selection.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: hasshape/withshape kernel traits",
+      "status": "completed",
+      "description": "**Goal:** Internal traits answering \"does this kernel have a tunable shape parameter?\" and \"rebuild it with a new one\", for every shipped kernel.\n\n**Files:**\n- Modify: `src/rbf.jl` (after GeneralizedPolyharmonic callable, ~line 190)\n- Modify: `src/wendland.jl` (at end)\n- Test: `test/rbf.jl`, `test/wendland.jl`\n\n**Acceptance Criteria:**\n- [ ] `hasshape` true for Gaussian, Multiquadratic, InverseQuadratic, InverseMultiquadratic, GeneralizedMultiquadratic, Wendland; false for Polyharmonic, ThinPlate(), GeneralizedPolyharmonic\n- [ ] `withshape(k, \u03b5)` returns same kernel type with new \u03b5, preserving \u03b2/degree for GeneralizedMultiquadratic and dim/degree behavior for Wendland (`withshape(w::Wendland, \u03b5) = Wendland(w.kernel, \u03b5)` \u2014 wrapped kernel is \u03b5-independent)\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 1: failing trait tests in test/rbf.jl + test/wendland.jl \u2192 traits in src/rbf.jl (default false + Union true + withshape per kernel; Wendland methods in src/wendland.jl since it's included after rbf.jl) \u2192 pass \u2192 commit.\n\n```json:metadata\n{\"files\": [\"src/rbf.jl\", \"src/wendland.jl\", \"test/rbf.jl\", \"test/wendland.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"hasshape true/false per kernel as specified\", \"withshape preserves non-shape parameters\", \"full test suite passes\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Rippa LOOCV helpers (src/rippa.jl)",
+      "status": "completed",
+      "description": "**Goal:** Exact leave-one-out error and score helpers for plain and bordered (saddle) systems, validated against brute-force leave-one-out.\n\n**Files:**\n- Create: `src/rippa.jl`\n- Modify: `src/ScatteredInterpolation.jl` (include after rbf.jl)\n- Create: `test/rippa.jl`\n- Modify: `test/runtests.jl` (include between wendland.jl and pum.jl)\n\n**Acceptance Criteria:**\n- [ ] `loocverrors(A, w)` matches brute-force LOO on a 12-point Gaussian(4) system, atol 1e-10\n- [ ] Same identity for ridge-smoothed A + \u03c3I\n- [ ] Matrix RHS: one diagonal serves all columns\n- [ ] Bordered `loocverrors(M, W\u039b, n)` matches brute-force LOO on a GeneralizedMultiquadratic saddle system, atol 1e-10\n- [ ] `loocvscore` equals sum(abs2, loocverrors(...)) and returns Inf for singular input instead of throwing\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 2; complete code in the plan document.\n\n```json:metadata\n{\"files\": [\"src/rippa.jl\", \"src/ScatteredInterpolation.jl\", \"test/rippa.jl\", \"test/runtests.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"plain loocverrors matches brute-force LOO atol 1e-10\", \"smoothed and matrix-RHS variants hold\", \"bordered variant matches brute-force LOO atol 1e-10\", \"loocvscore consistent and Inf on singular\", \"full suite passes\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: tune field on PartitionOfUnity",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** `PartitionOfUnity` accepts and validates `tune = :none | :loocv`; `:loocv` with a shapeless kernel rejected at construction.\n\n**Files:**\n- Modify: `src/pum.jl` (struct ~line 124, keyword constructor ~line 131, docstring ~line 103)\n- Test: `test/pum.jl`\n\n**Acceptance Criteria:**\n- [ ] `PartitionOfUnity(Gaussian()).tune === :none`; `PartitionOfUnity(Gaussian(); tune = :loocv).tune === :loocv`\n- [ ] `tune = :bogus` \u2192 ArgumentError\n- [ ] `tune = :loocv` with Polyharmonic(3), ThinPlate(), or GeneralizedPolyharmonic(3, 1) \u2192 ArgumentError naming the kernel type (\"has no shape parameter to tune\")\n- [ ] Docstring documents `tune` and that the kernel's own \u03b5 is ignored under :loocv\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 3; validation at constructor time (plan decision).\n\n```json:metadata\n{\"files\": [\"src/pum.jl\", \"test/pum.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"tune field defaults :none, accepts :loocv\", \"invalid tune symbol rejected\", \"shapeless kernel + :loocv rejected at construction\", \"docstring updated\", \"full suite passes\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Baseline target-scale benchmark (untuned)",
+      "status": "completed",
+      "description": "**Goal:** Measure and record the untuned baseline (build time + off-node max error, Gaussian(2), 10\u2075 points, 3D and 6D) BEFORE the tuning hot path exists (perf-plans-need-scale-benchmark policy).\n\n**Files:**\n- Modify: `docs/superpowers/plans/2026-07-04-loocv-shape-selection.md` (record results under \"Benchmark results\")\n\n**Acceptance Criteria:**\n- [ ] Untuned build time and off-node max error recorded for 3D and 6D at n = 100_000, with Threads.nthreads()\n- [ ] Numbers recorded in the plan file's \"Benchmark results\" section (Baseline table)\n\n**Verify:** benchmark script (complete in plan Task 4) runs to completion via mcp__julia__julia_eval; results table present in plan file\n\n**Steps:** Run baseline script \u2192 record table \u2192 sanity check 3D error ~0.1 expected; flag deviations at review checkpoint \u2192 commit.\n\n```json:metadata\n{\"files\": [\"docs/superpowers/plans/2026-07-04-loocv-shape-selection.md\"], \"verifyCommand\": \"mcp__julia__julia_eval baseline script from plan Task 4; table present in plan file\", \"acceptanceCriteria\": [\"untuned 3D and 6D build time + off-node max error at n=100_000 recorded with thread count\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Per-patch LOOCV tuning in the PUM build",
+      "status": "completed",
+      "blockedBy": [
+        2,
+        3,
+        4
+      ],
+      "description": "**Goal:** `tune = :loocv` selects each patch's \u03b5 by scanning 11 scale-derived candidates (LOOCV_CANDIDATES = 2.0 .^ (-2:0.5:3), \u03b5 = c/h with h the patch mean nearest-neighbor distance) scored with Rippa's formula, inside the existing threaded local-solve loop.\n\n**Files:**\n- Modify: `src/pum.jl` (LOOCV_CANDIDATES, meannndist, tuneshape(::RadialBasisFunction, ...), solvelocal; build loop routed through solvelocal)\n- Test: `test/pum.jl`\n\n**Acceptance Criteria:**\n- [ ] Tuned 3D build (n = 5000, Gaussian(), tune = :loocv) off-node max error < 0.5\u00d7 untuned Gaussian(2)\n- [ ] Exactness at nodes preserved under tuning (dims 2 and 3, atol 1e-6)\n- [ ] Matrix samples and smooth = 1e-3 builds work under tuning\n- [ ] Two tuned builds bit-identical (weights and per-patch \u03b5)\n- [ ] Tiny/degenerate patches don't error (h == 0 \u2192 kernel unchanged; np < 3 \u2192 \u03b5 = c_mid/h without scanning)\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 5; complete code in plan. GeneralizedMultiquadratic dispatch lands in Task 7.\n\n```json:metadata\n{\"files\": [\"src/pum.jl\", \"test/pum.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"tuned beats mis-scaled fixed eps by 2x at n=5000 3D\", \"exactness at nodes dims 2 and 3\", \"matrix samples and smoothing work tuned\", \"deterministic tuned builds\", \"degenerate patch fallbacks\", \"full suite passes\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: addpoints! re-tunes affected patches",
+      "status": "completed",
+      "blockedBy": [
+        5
+      ],
+      "description": "**Goal:** `addpoints!` re-solves go through `solvelocal`, so affected patches re-tune \u03b5 under :loocv; interior-query equivalence with a tuned rebuild holds.\n\n**Files:**\n- Modify: `src/pum.jl` (addpoints! re-solve loop; docstring parenthetical)\n- Test: `test/pum.jl`\n\n**Acceptance Criteria:**\n- [ ] addpoints! on a tuned interpolant matches a tuned full rebuild on interior queries (atol 1e-6)\n- [ ] New points interpolated exactly after tuned insertion\n- [ ] addpoints! docstring mentions re-tuning\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 6.\n\n```json:metadata\n{\"files\": [\"src/pum.jl\", \"test/pum.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"tuned insertion equals tuned rebuild on interior queries\", \"new points exact\", \"docstring mentions re-tuning\", \"full suite passes\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Bordered-system tuning for GeneralizedMultiquadratic",
+      "status": "pending",
+      "blockedBy": [
+        5
+      ],
+      "description": "**Goal:** `tune = :loocv` works for GeneralizedMultiquadratic by scoring candidates on the polynomial-augmented saddle system M = [A P; P\u1d40 0] (bordered loocvscore from Task 2).\n\n**Files:**\n- Modify: `src/pum.jl` (tuneshape method for GeneralizedRadialBasisFunction)\n- Test: `test/pum.jl`\n\n**Acceptance Criteria:**\n- [ ] PUM + GeneralizedMultiquadratic(1, 1/2, 2) + tune = :loocv builds and is exact at nodes (atol 1e-5)\n- [ ] Tuned locals preserve \u03b2 and degree\n- [ ] Full test suite passes\n\n**Verify:** `mcp__julia__julia_eval`: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` \u2192 all pass\n\n**Steps:** TDD per plan Task 7; complete code in plan (P assembled once \u2014 \u03b5-independent; per candidate refill A-block view).\n\n```json:metadata\n{\"files\": [\"src/pum.jl\", \"test/pum.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"GMQ tuned build exact at nodes atol 1e-5\", \"beta and degree preserved\", \"full suite passes\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Target-scale benchmark validation (tuned vs untuned)",
+      "status": "pending",
+      "blockedBy": [
+        6,
+        7
+      ],
+      "description": "**Goal:** Verify the spec's \u00a75 budgets at target scale: tuned Gaussian() off-node max error \u2265 10\u00d7 better than untuned Gaussian(2), and tuned build time \u2264 5\u00d7 untuned, at n = 100_000 in 3D and 6D.\n\n**USER-ORDERED GATE \u2014 NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- Modify: `docs/superpowers/plans/2026-07-04-loocv-shape-selection.md` (append to \"Benchmark results\")\n\n**Acceptance Criteria:**\n- [ ] 3D, n = 100_000: tuned off-node max error \u2264 untuned/10, both numbers captured\n- [ ] 6D, n = 100_000: tuned off-node max error \u2264 untuned/10, both numbers captured\n- [ ] Tuned build time \u2264 5\u00d7 untuned in both dimensions, both timings captured\n- [ ] All measurements recorded in the plan's \"Benchmark results\" section\n\n**Verify:** comparison script (complete in plan Task 8) via mcp__julia__julia_eval \u2192 ratio_err \u2265 10 and ratio_time \u2264 5 for d \u2208 {3, 6}\n\n**Steps:** Run comparison script (both sides same session) \u2192 check budgets \u2192 record \u2192 commit. On budget failure: report at review checkpoint, do NOT close, do NOT weaken thresholds.\n\n```json:metadata\n{\"files\": [\"docs/superpowers/plans/2026-07-04-loocv-shape-selection.md\"], \"verifyCommand\": \"mcp__julia__julia_eval comparison script from plan Task 8: ratio_err >= 10 and ratio_time <= 5 for d in (3, 6)\", \"acceptanceCriteria\": [\"3D error ratio >= 10 with captured numbers\", \"6D error ratio >= 10 with captured numbers\", \"build-time ratio <= 5 both dims with captured timings\", \"results recorded in plan file\"], \"modelTier\": \"standard\", \"userGate\": true, \"tags\": [\"user-gate\"], \"requireEvidenceTokens\": [[\"untuned\", \"baseline\", \"Gaussian(2)\"], [\"tuned\", \"loocv\"]]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: Documentation (methods.md)",
+      "status": "pending",
+      "blockedBy": [
+        7
+      ],
+      "description": "**Goal:** methods.md PUM section documents tune = :loocv (PartitionOfUnity docstring already updated in Task 3).\n\n**Files:**\n- Modify: `docs/src/methods.md` (kernel-scaling paragraph, lines 142\u2013148)\n\n**Acceptance Criteria:**\n- [ ] Manual-\u03b5-scaling paragraph offers tune = :loocv as an alternative\n- [ ] Short paragraph explains LOOCV selection and notes the kernel's own \u03b5 is ignored under tuning\n- [ ] Docs build cleanly (or Markdown well-formed with existing @ref anchors only)\n\n**Verify:** docs build via mcp__julia__julia_eval or diff inspection \u2014 no broken @ref targets\n\n**Steps:** Replace paragraph with verbatim text from plan Task 9 \u2192 verify \u2192 commit.\n\n```json:metadata\n{\"files\": [\"docs/src/methods.md\"], \"verifyCommand\": \"mcp__julia__julia_eval: Pkg.activate(\\\"docs\\\"); include(\\\"docs/make.jl\\\") or diff inspection\", \"acceptanceCriteria\": [\"scaling paragraph offers tune = :loocv\", \"LOOCV explanation paragraph present with eps-ignored note\", \"docs well-formed\"], \"modelTier\": \"mechanical\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-05T00:00:00Z"
+}
