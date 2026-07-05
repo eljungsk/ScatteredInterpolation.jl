@@ -101,7 +101,8 @@ end
 export PartitionOfUnity, addpoints!
 
 """
-    PartitionOfUnity(method; pointsperpatch = 80, overlap = 1.5, weight = nothing)
+    PartitionOfUnity(method; pointsperpatch = 80, overlap = 1.5, weight = nothing,
+                     tune = :none)
 
 Radial basis function partition of unity method (RBF-PUM) for large datasets. The data
 bounding box is covered with a regular grid of overlapping spherical patches; a small
@@ -117,6 +118,13 @@ higher evaluation cost. `weight` is the partition-of-unity weight function `ψ(r
 support on `[0, 1]`; the default `nothing` selects the C² Wendland function of the data
 dimension at `interpolate` time.
 
+`tune` selects automatic per-patch shape-parameter tuning: `:none` uses `method` as
+given, while `:loocv` chooses each patch's shape parameter `ε` by exact leave-one-out
+cross-validation (Rippa's method), scanning candidates scaled to the patch's mean
+nearest-neighbor spacing. Under `:loocv` the shape parameter stored in `method` is
+ignored, and the kernel must have one (`Polyharmonic`, `ThinPlate` and
+`GeneralizedPolyharmonic` do not).
+
 Only the `Euclidean` metric is supported. The `smooth` and `linsolve` keywords of
 `interpolate` are forwarded to every per-patch solve. Additional points can be added to
 the returned interpolant with [`addpoints!`](@ref).
@@ -126,17 +134,23 @@ struct PartitionOfUnity{M <: AbstractRadialBasisFunction, W} <: InterpolationMet
     pointsperpatch::Int
     overlap::Float64
     weight::W
+    tune::Symbol
 end
 
 function PartitionOfUnity(method::AbstractRadialBasisFunction;
                           pointsperpatch::Integer = 80, overlap::Real = 1.5,
-                          weight = nothing)
+                          weight = nothing, tune::Symbol = :none)
     pointsperpatch >= 1 || throw(ArgumentError(
         "pointsperpatch must be at least 1, got $pointsperpatch"))
     overlap > 1 || throw(ArgumentError(
         "overlap must be greater than 1 to guarantee full patch coverage, got $overlap"))
+    tune in (:none, :loocv) || throw(ArgumentError(
+        "tune must be :none or :loocv, got $(repr(tune))"))
+    tune === :loocv && !hasshape(method) && throw(ArgumentError(
+        "tune = :loocv requires a kernel with a shape parameter, but " *
+        "$(typeof(method)) has no shape parameter to tune"))
 
-    PartitionOfUnity(method, Int(pointsperpatch), Float64(overlap), weight)
+    PartitionOfUnity(method, Int(pointsperpatch), Float64(overlap), weight, tune)
 end
 
 mutable struct PartitionOfUnityInterpolant{T <: AbstractFloat, D, S <: AbstractArray,

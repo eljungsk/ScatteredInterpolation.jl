@@ -105,6 +105,15 @@ end
         @test pum.pointsperpatch == 80
         @test pum.overlap == 1.5
         @test pum.weight === nothing
+
+        # tune keyword
+        @test PartitionOfUnity(Gaussian()).tune === :none
+        @test PartitionOfUnity(Gaussian(); tune = :loocv).tune === :loocv
+        @test_throws ArgumentError PartitionOfUnity(Gaussian(); tune = :bogus)
+        @test_throws ArgumentError PartitionOfUnity(Polyharmonic(3); tune = :loocv)
+        @test_throws ArgumentError PartitionOfUnity(GeneralizedPolyharmonic(3, 1);
+                                                    tune = :loocv)
+        @test_throws ArgumentError PartitionOfUnity(ThinPlate(); tune = :loocv)
     end
 
     @testset "interpolate builds local interpolants" begin
