@@ -819,3 +819,9 @@ git commit -m "Record target-scale benchmark results for perf improvements"
 ## Benchmark results
 
 (Appended by Tasks 1 and 7.)
+
+### Task 1 baseline (this machine)
+- 3D build: 0.405 s (review: 0.399 s)
+- 3D evaluate: 0.157 s (review: 0.145 s)
+- threads: 12
+- (medians of 3 build / 5 eval runs; patches 12167)
