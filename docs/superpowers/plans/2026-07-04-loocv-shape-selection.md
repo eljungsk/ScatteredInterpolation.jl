@@ -1301,3 +1301,47 @@ smaller. Per the plan's Task 4 Step 2 instruction, this is noted here rather tha
 silently proceeding — it may make Task 8's ≥10× tuned-vs-untuned error ratio harder
 to clear in 3D, since the untuned baseline is already fairly accurate at this point
 count/spacing. Revisit at the Task 8 checkpoint if the budget is not met.
+
+### Tuned vs untuned (n = 100_000), Task 8 — BUDGETS NOT MET
+
+| d | untuned build [s] | tuned build [s] | ratio_time (≤5 required) | untuned err | tuned err | ratio_err (≥10 required) |
+|---|---|---|---|---|---|---|
+| 3 | 0.469 | 130.5 | **278.6** | 0.005472 | 0.024762 | **0.221** |
+| 6 | 8.171 | did not finish in 10 min (>590s) | **>72** (partial) | 0.045197 | not obtained | not obtained |
+
+nthreads = 12. Both dimensions fail both budgets by a wide margin (3D: build
+~279× slower, not ≤5×; error ratio 0.22 — tuned is *worse*, not ≥10× better. 6D
+tuned build did not complete inside a 10-minute cap, already >72× the untuned
+build time with no error result to report).
+
+**This is the fully-anticipated outcome of the two open risks flagged in the
+Task 5 and Task 6 amendments, now confirmed at target scale, not a new
+finding:**
+
+- **Accuracy:** `Gaussian(2)` is already close to optimal for this smooth
+  benchmark function at this density (established in the Task 5 amendment via
+  direct measurement — its per-patch conditioning is safely inside the trusted
+  region, and the RBF trade-off principle means no scale-derived tuning grid can
+  find something reliably better without either an unreliable score or an
+  unreliable solve). Beating it by 10× is not an achievable target for *this*
+  test function — it was never achievable, independent of implementation
+  quality, once the Task 5 investigation established that tuning's honest goal
+  is "no worse than untuned, and better when the untuned kernel is genuinely
+  mis-scaled" rather than "always 10× better."
+- **Performance:** each gated candidate now costs *two* independent
+  factorizations (the rcond check's own `lu!`, plus `loocvscore`'s LinearSolve
+  factorization) across 12 candidates (11 grid + anchor) per patch, and at
+  n = 100,000 there are thousands of patches. This is the ≤5×-build-budget risk
+  explicitly flagged as "likely unachievable" in the Task 5 amendment,
+  confirmed: observed ratio is two orders of magnitude over budget, not merely
+  "somewhat over."
+
+**Per the plan's own Task 8 instructions ("do NOT close, do NOT weaken
+thresholds" on budget failure): this task is left open, not marked complete.**
+See the conversation/review checkpoint for the decision on how to proceed —
+options include revising the benchmark function to one where a mis-scaled
+fixed kernel genuinely underperforms (matching the feature's actual, narrower
+regime of benefit established in Task 5), reducing the candidate count
+(e.g. golden-section search over the U-shaped in-regime score instead of an
+11-point linear scan) to address the time budget, or revising the stated
+budget numbers to reflect what the feature can actually, honestly deliver.
