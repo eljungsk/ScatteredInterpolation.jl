@@ -235,12 +235,22 @@ end
 # nearly free.
 const RCOND_THRESHOLD = 1e-8
 
-# Rippa's LOOCV score, but Inf for any candidate whose reciprocal condition number
-# falls below RCOND_THRESHOLD (see above) rather than trusting a numerically
-# meaningless inv().
-function safeloocvscore(A::AbstractMatrix, samples::AbstractVecOrMat)
+# Rippa's LOOCV score (`loocvscore`, src/rippa.jl — routed through LinearSolve.jl so
+# its algorithm-selection heuristics apply to these small dense systems), but Inf
+# for any candidate whose reciprocal condition number falls below RCOND_THRESHOLD
+# (see above) rather than trusting a numerically meaningless result. The rcond check
+# factorizes independently via a raw, caller-owned scratch buffer (`lu!`, not `lu`:
+# `lu`'s internal defensive copy was a measurable allocation hot spot under the
+# threaded build, implicated in a heap-corruption crash under heavy thread
+# contention — see docs/superpowers/plans/2026-07-04-loocv-shape-selection.md,
+# Task 6 amendment) — this is deliberately a *second*, independent factorization
+# from the one `loocvscore` performs internally: rcond is a property of the matrix
+# itself, not of whichever algorithm LinearSolve selects to solve it, so gating on
+# it must not depend on that choice.
+function safeloocvscore(Abuf::AbstractMatrix, A::AbstractMatrix, samples::AbstractVecOrMat)
+    Abuf .= A
     F = try
-        lu(A)
+        lu!(Abuf)
     catch err
         err isa SINGULAR_EXCEPTIONS && return Inf
         rethrow()
@@ -248,9 +258,7 @@ function safeloocvscore(A::AbstractMatrix, samples::AbstractVecOrMat)
     anorm = opnorm(A, 1)
     rcond = LinearAlgebra.LAPACK.gecon!('1', F.factors, anorm)
     rcond < RCOND_THRESHOLD && return Inf
-    Ainv = inv(F)
-    W = Ainv * samples
-    return sum(abs2, W ./ diag(Ainv))
+    return loocvscore(A, samples)
 end
 
 # Select the best shape parameter for one patch: score the caller's own kernel with
@@ -280,6 +288,7 @@ function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
 
     R = pairwise(metric, pts, dims = 2)
     A = similar(R)
+    Abuf = similar(R)   # reused LU scratch buffer across every candidate below
 
     A .= kernel.(R)
     addSmoothing!(A, smooth)
@@ -291,7 +300,7 @@ function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
         ϕ = withshape(kernel, ε)
         A .= ϕ.(R)
         addSmoothing!(A, smooth)
-        s = safeloocvscore(A, samples)   # gated: only a trustworthy score may win
+        s = safeloocvscore(Abuf, A, samples)   # gated: only a trustworthy score may win
         if s < best
             best = s
             εbest = ε
@@ -456,7 +465,9 @@ end
 
 Add new data points to an existing [`PartitionOfUnity`](@ref) interpolant without a
 full rebuild: only the local systems of the patches covering the new points are
-re-solved (using the same `smooth` and `linsolve` settings as the original build).
+re-solved (using the same `smooth` and `linsolve` settings as the original build,
+and re-tuning the shape parameter of affected patches when the interpolant was
+built with `tune = :loocv`).
 
 The patch grid is fixed at construction, so every new point must lie inside the
 bounding box of the original data and inside at least one existing patch; otherwise an
@@ -528,10 +539,9 @@ function addpoints!(itp::PartitionOfUnityInterpolant{T, D},
         Threads.@threads for k in eachindex(aff)
             p = aff[k]
             idxs = itp.patchpoints[p]
-            itp.locals[p] = interpolate(itp.method.method, itp.points[:, idxs],
-                                        patchsamples(itp.samples, idxs);
-                                        metric = itp.metric, smooth = itp.smooth,
-                                        linsolve = itp.linsolve)
+            itp.locals[p] = solvelocal(itp.method, itp.points[:, idxs],
+                                       patchsamples(itp.samples, idxs),
+                                       itp.smooth, itp.metric, itp.linsolve)
         end
     end
 

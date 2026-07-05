@@ -337,6 +337,23 @@ end
         @test out[:, 2] ≈ 2 .* addedvals atol = 1e-6
     end
 
+    @testset "Tuned insertion matches tuned rebuild" begin
+        # Gaussian(2), not the default Gaussian() (ε = 1): see the Task 5 amendment
+        # in the plan — ε = 1 is marginal/borderline for node-exactness at this
+        # point density even untuned, unrelated to addpoints! itself.
+        itp = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv), base, basevals)
+        addpoints!(itp, added, addedvals)
+        rebuilt = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv),
+                              hcat(base, added), vcat(basevals, addedvals))
+        @test itp.grid.ncells == rebuilt.grid.ncells   # sanity: same grid
+        # Interior patches see identical data in both paths, so identical candidate
+        # grids select identical ε. (Boundary patches may differ via knn top-up,
+        # exactly as in the untuned equivalence test above.)
+        q = kroneckerpoints(2, 97; offset = 3000) .* 0.2 .+ 0.4
+        @test evaluate(itp, q) ≈ evaluate(rebuilt, q) atol = 1e-6
+        @test evaluate(itp, added) ≈ addedvals atol = 1e-6
+    end
+
     @testset "Errors" begin
         itp = interpolate(PartitionOfUnity(Gaussian(2)), base, basevals)
         # Outside the original bounding box

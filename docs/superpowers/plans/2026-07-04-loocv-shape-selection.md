@@ -870,6 +870,73 @@ before measuring.
 
 ---
 
+## Task 2 & 5 amendment: LOOCV solves route through LinearSolve.jl
+
+User correction after Task 5 landed: the plan's "candidate scans use direct
+`inv()`, NOT LinearSolve" decision was an oversight — LOOCV scoring should use
+LinearSolve.jl too, so its algorithm-selection heuristics (which pick efficient
+methods for small dense systems) apply to the candidate-scanning hot path the
+same way they already do for the main per-patch solve.
+
+`src/rippa.jl`'s `loocverrors`/`loocvscore` (plain and bordered) no longer call
+`inv()` directly. Both factorize once via `_initsolve` (`src/rbf.jl`), solve for
+the weight vector through LinearSolve's per-vector cache (`_trysolve!`, mirroring
+`_solve!` but checking `retcode == LinearSolve.ReturnCode.Failure` and returning
+`nothing` instead of trusting a meaningless result — LinearSolve does not throw
+on a singular system; verified: `retcode = Failure`, `u` silently all-zero;
+`LinearSolve.ReturnCode` was accessible without adding `SciMLBase` as a new
+direct dependency), then get `diag(A⁻¹)`.
+
+That last step went through two designs. First attempt: solve `A*X = I` one
+column at a time through the same per-vector LinearSolve cache used for the
+weight vector. Measured cost: a plain n = 400-point tuned build went from
+~5ms (old `inv()`) to ~3s — a ~600x regression, because LinearSolve's
+small-system algorithm choice (`RFLUFactorization`, confirmed via
+`cache.alg` for every tested size 1–100) does not accept a matrix right-hand
+side at all (the *same*, pre-existing limitation already documented on
+`_solve!` in `rbf.jl` for the main RBF path), so every one of the n columns
+pays full per-call dispatch overhead. Second design (adopted): reuse the
+factorization LinearSolve's heuristic already built while solving for the
+weight vector — extracted via `_factorization(cache)` (`getproperty(
+cache.cacheval, Symbol(cache.alg.alg))`, unwrapping the `(LU, pivot buffer)`
+tuple `RFLUFactorization` stores) — for one batched multi-right-hand-side
+`ldiv!` against the identity (`_invdiag!`). This is a genuine solve (`ldiv!`
+on a factorization object, not `inv()` and not `inv(A)*b`), still uses
+LinearSolve's algorithm choice for the factorization itself, and brought the
+n = 400 build back down to ~0.19ms — ~16x faster than the naive per-column
+loop, though still slower than the original raw-`inv()` baseline (the extra
+cost is the second, independent rcond factorization below, not this step).
+**TODO:** revisit `_factorization`/`ldiv!` once LinearSolve.jl ships native
+multiple-RHS batching (tracked in-code in `rippa.jl`) — the identity solve
+could then route through `_trysolve!` directly like the weight vector does,
+removing the need to reach into `cache.cacheval`/`cache.alg` internals.
+
+`src/pum.jl`'s `safeloocvscore` (the rcond-gated wrapper from the Task 5
+amendment) now delegates the actual score computation to `loocvscore` above;
+it still performs its own independent raw `lu!`/`gecon!` factorization purely
+to compute `rcond` — deliberately kept separate, since `rcond` is a property of
+the matrix itself and gating on it must not depend on whichever algorithm
+LinearSolve happens to select internally. This means each gated candidate now
+does *two* factorizations (one for the rcond check, one inside `loocvscore`) —
+a real, known cost, left as-is for Task 8 to weigh against the ≤5x budget risk
+already flagged above, rather than optimizing prematurely.
+
+Also fixed in this pass, found while stress-testing Task 6's `addpoints!`
+re-tuning under `Pkg.test`'s subprocess: `Pkg.test` (fresh process) reproduced a
+`SIGABRT`/"corrupted double-linked list" crash inside `lu(A)`'s internal
+defensive copy, reliably, under the heavy allocation volume of the threaded
+tuning hot loop (~105M allocations before crash) — not reproducible in a warm
+interactive session with the same code, consistent with a GC/allocator race
+under thread contention rather than a logic bug. `safeloocvscore` (then still
+using raw `lu()`) was changed to `lu!` on a caller-owned, per-`tuneshape`-call
+scratch buffer reused across all candidates, eliminating that repeated internal
+copy; confirmed stable across multiple `Pkg.test` reruns afterward (previously
+crashed reliably). This buffer-reuse fix predates and is independent of the
+LinearSolve-routing change above, but both reduce allocation pressure in the
+same hot loop.
+
+---
+
 ### Task 6: `addpoints!` re-tunes affected patches
 
 **Goal:** Patch re-solves triggered by `addpoints!` go through `solvelocal`, so affected patches re-tune their `ε` under `:loocv`; interior-query equivalence with a tuned rebuild holds.
