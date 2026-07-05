@@ -193,8 +193,11 @@ end
 
 # ---- LOOCV shape-parameter tuning (tune = :loocv) --------------------------------
 
-# Shape-parameter candidates are ε = c / h for the patch's mean nearest-neighbor
-# distance h, spanning the flat-to-peaked range in half-octave steps.
+# Bounds of the shape-parameter search: ε = c / h for the patch's mean
+# nearest-neighbor distance h, c ranging flat-to-peaked. Historically an 11-point
+# half-octave grid scanned in full (superseded below by a golden-section search over
+# the same [min, max] range); still used directly for the too-few-points fallback
+# (`cmid`, its geometric middle) and to fix the golden-section search's bracket.
 const LOOCV_CANDIDATES = 2.0 .^ (-2:0.5:3)
 
 # Mean nearest-neighbor distance among the patch points; zero when there is no
@@ -231,54 +234,74 @@ end
 # amount of scoring cleverness recovers information that isn't there, so gated-out
 # candidates are simply not scored (Inf), never selected. `rcond` is obtained from
 # the LU factorization via LAPACK gecon! (not Cholesky: Multiquadratic-family
-# kernels are indefinite), which the score computation needs anyway, so the check is
-# nearly free.
+# kernels are indefinite), reusing the same factorization `gatedloocvscore`
+# (src/rippa.jl) needs for the score itself — see the Task 8 amendment there for why
+# this is no longer a second, independent factorization.
 const RCOND_THRESHOLD = 1e-8
 
-# Rippa's LOOCV score (`loocvscore`, src/rippa.jl — routed through LinearSolve.jl so
-# its algorithm-selection heuristics apply to these small dense systems), but Inf
-# for any candidate whose reciprocal condition number falls below RCOND_THRESHOLD
-# (see above) rather than trusting a numerically meaningless result. The rcond check
-# factorizes independently via a raw, caller-owned scratch buffer (`lu!`, not `lu`:
-# `lu`'s internal defensive copy was a measurable allocation hot spot under the
-# threaded build, implicated in a heap-corruption crash under heavy thread
-# contention — see docs/superpowers/plans/2026-07-04-loocv-shape-selection.md,
-# Task 6 amendment) — this is deliberately a *second*, independent factorization
-# from the one `loocvscore` performs internally: rcond is a property of the matrix
-# itself, not of whichever algorithm LinearSolve selects to solve it, so gating on
-# it must not depend on that choice.
-function safeloocvscore(Abuf::AbstractMatrix, A::AbstractMatrix, samples::AbstractVecOrMat)
-    Abuf .= A
-    F = try
-        lu!(Abuf)
-    catch err
-        err isa SINGULAR_EXCEPTIONS && return Inf
-        rethrow()
+# Golden-section search replaces an earlier fixed 11-point linear scan over
+# LOOCV_CANDIDATES (docs/superpowers/plans/2026-07-04-loocv-shape-selection.md, Task
+# 8 amendment): the LOO score is empirically a clean single-trough (unimodal)
+# function of log(ε) in the safe conditioning region — the RBF trade-off principle
+# predicts exactly this shape (too flat ⟹ ill-conditioned/uninformative, too peaked
+# ⟹ no cross-point information, one interior optimum between) — and where a fixed
+# kernel is genuinely mis-scaled for the local patch, that interior optimum lines up
+# with the true off-node error minimum, not just the LOO proxy (verified directly:
+# scored a synthetic localized-peak patch across 41 log-spaced ε and compared each
+# LOO score against true holdout error — both minimized at the same ε). Golden
+# section is comparison-based (only ever asks "is f(c) < f(d)?"), so Inf-scored
+# (gated-out) candidates compare correctly without special-casing, unlike
+# derivative- or interpolation-based methods (e.g. Brent's parabolic step) that
+# assume finite values throughout the bracket.
+function goldensectionmin(f, a, b; iters::Integer)
+    invphi = (sqrt(5) - 1) / 2
+    invphi2 = (3 - sqrt(5)) / 2
+    h = b - a
+    c = a + invphi2 * h
+    d = a + invphi * h
+    fc = f(c)
+    fd = f(d)
+    for _ in 1:iters
+        if fc < fd
+            b, d, fd = d, c, fc
+            h *= invphi
+            c = a + invphi2 * h
+            fc = f(c)
+        else
+            a, c, fc = c, d, fd
+            h *= invphi
+            d = a + invphi * h
+            fd = f(d)
+        end
     end
-    anorm = opnorm(A, 1)
-    rcond = LinearAlgebra.LAPACK.gecon!('1', F.factors, anorm)
-    rcond < RCOND_THRESHOLD && return Inf
-    return loocvscore(A, samples)
+    return fc < fd ? (c, fc) : (d, fd)
 end
 
+# 6 golden-section iterations (8 score evaluations total, including the two initial
+# points) shrink the log2(c) bracket to ~5.6% of its original width — finer than the
+# ~41%-per-step (2^0.5) resolution of the old 11-point grid — while evaluating fewer
+# candidates than that grid did.
+const LOOCV_GOLDEN_ITERS = 6
+
 # Select the best shape parameter for one patch: score the caller's own kernel with
-# the plain (ungated) Rippa score as the baseline, then let scale-derived grid
-# candidates challenge it — but only through the gated safeloocvscore. A grid
-# candidate replaces the anchor only if it both passes the reliability gate AND
-# scores better than the anchor. This asymmetry is deliberate: the anchor is the
-# kernel the caller (or the untuned path) would use anyway, so it is never rejected
-# for being "unscoreable" — a flat, unscoreable anchor on smooth data typically has
-# an extremely good (tiny) LOO score in exact arithmetic even though inv() cannot
-# certify it, and demanding gate-passing on both sides only lets tuning move away
-# from the caller's kernel when a *trustworthy* alternative is genuinely better (see
-# docs/superpowers/plans/2026-07-04-loocv-shape-selection.md, Task 5 amendment: an
-# earlier design that gated the anchor too let a merely-safe-but-worse grid
-# candidate override a good-but-unscoreable anchor, causing ~250-500x regressions).
-# The distance matrix does not depend on ε and is computed once; each candidate only
-# re-applies the kernel, adds smoothing, and factorizes the small dense system. The
-# final solve of the winner runs through the standard interpolate path afterwards
-# (where the user's linsolve choice applies); candidate scans deliberately use
-# direct factorization instead.
+# the plain (ungated) Rippa score as the baseline, then let a golden-section search
+# over the scale-derived candidate range challenge it — but only through the gated
+# `gatedloocvscore`. The search result replaces the anchor only if it both passes
+# the reliability gate AND scores better than the anchor. This asymmetry is
+# deliberate: the anchor is the kernel the caller (or the untuned path) would use
+# anyway, so it is never rejected for being "unscoreable" — a flat, unscoreable
+# anchor on smooth data typically has an extremely good (tiny) LOO score in exact
+# arithmetic even though it cannot be certified, and demanding gate-passing on both
+# sides only lets tuning move away from the caller's kernel when a *trustworthy*
+# alternative is genuinely better (see docs/superpowers/plans/
+# 2026-07-04-loocv-shape-selection.md, Task 5 amendment: an earlier design that
+# gated the anchor too let a merely-safe-but-worse candidate override a
+# good-but-unscoreable anchor, causing ~250-500x regressions). The distance matrix
+# does not depend on ε and is computed once; each candidate only re-applies the
+# kernel, adds smoothing, and factorizes the small dense system. The final solve of
+# the winner runs through the standard interpolate path afterwards (where the
+# user's linsolve choice applies); the search itself deliberately uses direct
+# factorization instead.
 function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
                    samples::AbstractVecOrMat, smooth, metric)
     h = meannndist(pts)
@@ -288,50 +311,32 @@ function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
 
     R = pairwise(metric, pts, dims = 2)
     A = similar(R)
-    Abuf = similar(R)   # reused LU scratch buffer across every candidate below
 
     A .= kernel.(R)
     addSmoothing!(A, smooth)
     best = loocvscore(A, samples)   # ungated: the anchor is never rejected as unscoreable
     εbest = kernel.ε
 
-    for c in LOOCV_CANDIDATES
-        ε = c / h
+    lo, hi = extrema(log2, LOOCV_CANDIDATES)
+    function f(t)
+        ε = exp2(t) / h
         ϕ = withshape(kernel, ε)
         A .= ϕ.(R)
         addSmoothing!(A, smooth)
-        s = safeloocvscore(Abuf, A, samples)   # gated: only a trustworthy score may win
-        if s < best
-            best = s
-            εbest = ε
-        end
+        return gatedloocvscore(A, samples, RCOND_THRESHOLD)   # gated: only a trustworthy score may win
+    end
+    tbest, sbest = goldensectionmin(f, lo, hi; iters = LOOCV_GOLDEN_ITERS)
+    if sbest < best
+        best = sbest
+        εbest = exp2(tbest) / h
     end
     return withshape(kernel, εbest)
-end
-
-# Bordered variant of the rcond gate above, for polynomial-augmented saddle
-# systems M = [A P; Pᵀ 0] (GeneralizedMultiquadratic): identical reasoning, just
-# using the bordered `loocvscore(M, F, n)` and computing rcond on the full
-# (m = n + npoly)-sized M.
-function safeloocvscore(Mbuf::AbstractMatrix, M::AbstractMatrix,
-                        F::AbstractVecOrMat, n::Integer)
-    Mbuf .= M
-    Fct = try
-        lu!(Mbuf)
-    catch err
-        err isa SINGULAR_EXCEPTIONS && return Inf
-        rethrow()
-    end
-    anorm = opnorm(M, 1)
-    rcond = LinearAlgebra.LAPACK.gecon!('1', Fct.factors, anorm)
-    rcond < RCOND_THRESHOLD && return Inf
-    return loocvscore(M, F, n)
 end
 
 # Bordered variant of `tuneshape` for polynomial-augmented kernels
 # (GeneralizedMultiquadratic): candidates (and the caller's own kernel, as the
 # anchor) are scored on the saddle system M = [A P; Pᵀ 0] via the bordered
-# safeloocvscore/loocvscore above. The polynomial block P is ε-independent and
+# `gatedloocvscore`/`loocvscore`. The polynomial block P is ε-independent and
 # assembled once; each candidate only refills the A-block view of M in place.
 function tuneshape(kernel::GeneralizedRadialBasisFunction, pts::AbstractMatrix,
                    samples::AbstractVecOrMat, smooth, metric)
@@ -348,7 +353,6 @@ function tuneshape(kernel::GeneralizedRadialBasisFunction, pts::AbstractMatrix,
     M = zeros(promote_type(eltype(R), eltype(P)), m, m)
     M[1:np, (np + 1):m] .= P
     M[(np + 1):m, 1:np] .= P'
-    Mbuf = similar(M)
     F = samples isa AbstractVector ?
         vcat(samples, zeros(eltype(samples), npoly)) :
         vcat(samples, zeros(eltype(samples), npoly, size(samples, 2)))
@@ -359,16 +363,18 @@ function tuneshape(kernel::GeneralizedRadialBasisFunction, pts::AbstractMatrix,
     best = loocvscore(M, F, np)   # ungated: the anchor is never rejected as unscoreable
     εbest = kernel.ε
 
-    for c in LOOCV_CANDIDATES
-        ε = c / h
+    lo, hi = extrema(log2, LOOCV_CANDIDATES)
+    function f(t)
+        ε = exp2(t) / h
         ϕ = withshape(kernel, ε)
         Ablock .= ϕ.(R)
         addSmoothing!(Ablock, smooth)
-        s = safeloocvscore(Mbuf, M, F, np)   # gated: only a trustworthy score may win
-        if s < best
-            best = s
-            εbest = ε
-        end
+        return gatedloocvscore(M, F, np, RCOND_THRESHOLD)   # gated: only a trustworthy score may win
+    end
+    tbest, sbest = goldensectionmin(f, lo, hi; iters = LOOCV_GOLDEN_ITERS)
+    if sbest < best
+        best = sbest
+        εbest = exp2(tbest) / h
     end
     return withshape(kernel, εbest)
 end

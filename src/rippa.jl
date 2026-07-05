@@ -20,12 +20,10 @@
 # called out in rbf.jl's `_solve!` for the same underlying limitation) — the
 # `_factorization`/`ldiv!` extraction below could then be replaced by routing the
 # identity solve through LinearSolve directly, matching `_trysolve!`'s pattern.
-
-# Matrix exceptions raised by a raw LU factorization on (numerically) singular
-# input — used by the reciprocal-condition-number gate in pum.jl (safeloocvscore),
-# which factorizes independently of the LinearSolve-routed solves below.
-const SINGULAR_EXCEPTIONS = Union{SingularException, LinearAlgebra.LAPACKException,
-                                  LinearAlgebra.ZeroPivotException}
+#
+# `gatedloocvscore` (used by pum.jl's tuning search) folds the reciprocal-
+# condition-number gate into this same factorization instead of factorizing a
+# second time — see its docstring below.
 
 # Like `_solve!` (rbf.jl), but returns `nothing` instead of trusting a result when
 # LinearSolve reports failure. Needed here (and not in the main RBF solve path)
@@ -121,6 +119,40 @@ function loocvscore(M::AbstractMatrix, F::AbstractVecOrMat, n::Integer)
     cache = _initsolve(M, nothing)
     WΛ = _trysolve!(cache, F)
     WΛ === nothing && return Inf
+    dinv = _invdiag!(cache)
+    E = WΛ isa AbstractVector ? WΛ[1:n] ./ dinv[1:n] : WΛ[1:n, :] ./ dinv[1:n]
+    return sum(abs2, E)
+end
+
+# Gated LOOCV score for the tuning hot loop (pum.jl): reuses the *same*
+# factorization LinearSolve already built for the weight solve, both for the
+# reciprocal-condition-number gate (gecon!) and for the score's diag(A⁻¹) — one
+# factorization total per candidate, not two (an earlier design factorized
+# independently via a raw `lu!` just for the gate, on top of loocvscore's own
+# LinearSolve factorization; see docs/superpowers/plans/
+# 2026-07-04-loocv-shape-selection.md, Task 8 amendment). Returns Inf when
+# LinearSolve reports failure (near/exactly singular A) or when rcond falls below
+# `rcondthreshold`, exactly as safeloocvscore used to.
+function gatedloocvscore(A::AbstractMatrix, F::AbstractVecOrMat, rcondthreshold)
+    cache = _initsolve(A, nothing)
+    W = _trysolve!(cache, F)
+    W === nothing && return Inf
+    Fact = _factorization(cache)
+    rcond = LinearAlgebra.LAPACK.gecon!('1', Fact.factors, opnorm(A, 1))
+    rcond < rcondthreshold && return Inf
+    dinv = _invdiag!(cache)
+    return sum(abs2, W ./ dinv)
+end
+
+# Bordered variant of the gated score above.
+function gatedloocvscore(M::AbstractMatrix, F::AbstractVecOrMat, n::Integer,
+                         rcondthreshold)
+    cache = _initsolve(M, nothing)
+    WΛ = _trysolve!(cache, F)
+    WΛ === nothing && return Inf
+    Fact = _factorization(cache)
+    rcond = LinearAlgebra.LAPACK.gecon!('1', Fact.factors, opnorm(M, 1))
+    rcond < rcondthreshold && return Inf
     dinv = _invdiag!(cache)
     E = WΛ isa AbstractVector ? WΛ[1:n] ./ dinv[1:n] : WΛ[1:n, :] ./ dinv[1:n]
     return sum(abs2, E)
