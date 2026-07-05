@@ -54,6 +54,7 @@ Run via `mcp__julia__julia_eval` with `env_path = "/home/emil/.julia/dev/Scatter
 
 ```julia
 using ScatteredInterpolation, Random, LinearAlgebra
+using Statistics: median
 const SI = ScatteredInterpolation
 Random.seed!(42)
 pts = rand(3, 100_000)
@@ -61,16 +62,18 @@ f3(x) = sin(4x[1]) * cos(3x[2]) + x[3]^2
 vals = [f3(view(pts, :, i)) for i in 1:100_000]
 pum = PartitionOfUnity(Gaussian(50.0))
 itp = interpolate(pum, pts, vals)                     # warm up
-t_build = @elapsed itp = interpolate(pum, pts, vals)
+t_build = median([@elapsed interpolate(pum, pts, vals) for _ in 1:3])
 qpts = rand(3, 50_000)
 SI.evaluate(itp, qpts)                                # warm up
-t_eval = @elapsed SI.evaluate(itp, qpts)
+t_eval = median([@elapsed SI.evaluate(itp, qpts) for _ in 1:5])
 println("threads=", Threads.nthreads(), " build: ", round(t_build, digits = 3),
         " s | eval: ", round(t_eval, digits = 3), " s | patches: ", length(itp.locals))
 ```
 
 Expected output shape: `threads=12 build: 0.399 s | eval: 0.145 s | patches: 12167`
-(times within the acceptance windows; patch count exactly 12167 for this seed).
+(median times within the acceptance windows; patch count exactly 12167 for this
+seed). Medians, not single samples: single-run `@elapsed` on these phases swings
+±70 % with GC timing.
 
 - [ ] **Step 2: Record the numbers**
 
@@ -770,6 +773,7 @@ Via `mcp__julia__julia_eval` (env_path = repo):
 
 ```julia
 using ScatteredInterpolation, Random, LinearAlgebra
+using Statistics: median
 const SI = ScatteredInterpolation
 Random.seed!(7)
 pts6 = rand(6, 100_000)
@@ -777,10 +781,10 @@ f6(x) = sin(4x[1]) * cos(3x[2]) + x[3]^2 + x[4] - x[5] * x[6]
 vals6 = [f6(view(pts6, :, i)) for i in 1:100_000]
 pum6 = PartitionOfUnity(Gaussian(2.0))
 itp6 = interpolate(pum6, pts6, vals6)                    # warm up
-t_build = @elapsed itp6 = interpolate(pum6, pts6, vals6)
+t_build = median([@elapsed interpolate(pum6, pts6, vals6) for _ in 1:3])
 q6 = rand(6, 50_000)
 SI.evaluate(itp6, q6)                                    # warm up
-t_eval = @elapsed SI.evaluate(itp6, q6)
+t_eval = median([@elapsed SI.evaluate(itp6, q6) for _ in 1:5])
 println("6D build: ", round(t_build, digits = 3), " s | eval: ", round(t_eval, digits = 3),
         " s | patches: ", length(itp6.locals))
 ```
