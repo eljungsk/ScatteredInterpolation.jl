@@ -1,0 +1,54 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-05-perf-improvements.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Confirm the performance baseline",
+      "status": "pending",
+      "description": "**Goal:** Reproduce the review's baseline numbers on this machine so later tasks measure against a trusted reference (perf-plans-need-scale-benchmark policy: baseline before hot-path work).\n\n**Files:**\n- Modify: `docs/superpowers/plans/2026-07-05-perf-improvements.md` (append results under \"Benchmark results\")\n\n**Acceptance Criteria:**\n- [ ] Baseline script runs to completion via mcp__julia__julia_eval (env_path = /home/emil/.julia/dev/ScatteredInterpolation)\n- [ ] 3D build within 0.30-0.50 s and 3D evaluate within 0.11-0.19 s; if outside, STOP and report (targets need rescaling)\n- [ ] Numbers recorded in the plan file under \"Benchmark results → Task 1 baseline\"\n\n**Verify:** script output shows `build:` and `eval:` lines; values inside the windows; `patches: 12167` for seed 42.\n\n**Steps:** Run the 3D baseline script from the plan (Task 1 Step 1, verbatim — note: call `SI.evaluate` qualified, Distances also exports `evaluate`); append results to the plan's \"Benchmark results\" section; commit the plan file.\n\n```json:metadata\n{\"files\": [\"docs/superpowers/plans/2026-07-05-perf-improvements.md\"], \"verifyCommand\": \"baseline script via mcp__julia__julia_eval; build in [0.30,0.50] s, eval in [0.11,0.19] s\", \"acceptanceCriteria\": [\"script runs to completion\", \"3D build 0.30-0.50 s and eval 0.11-0.19 s\", \"numbers recorded in plan\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: @views in polynomial assembly (Finding 5)",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Stop `generateMultivariatePolynomial` from materializing a length-n row copy per polynomial term-factor (measured 2.3×: 358 → 154 µs at 3D degree 3, n = 5000).\n\n**Files:**\n- Modify: `src/rbf.jl:398`\n\n**Acceptance Criteria:**\n- [ ] Pkg.test() passes\n- [ ] The only change is the added `@views`\n\n**Verify:** `using Pkg; Pkg.test()` via mcp__julia__julia_eval (env_path = repo) → all tests pass.\n\n**Steps:** In `generateMultivariatePolynomial`, change `P[:, position] .*= points[var, :]` to `@views P[:, position] .*= points[var, :]` (exact diff in plan Task 2). Run Pkg.test(). Commit src/rbf.jl with the message given in the plan.\n\n```json:metadata\n{\"files\": [\"src/rbf.jl\"], \"verifyCommand\": \"Pkg.test() via mcp__julia__julia_eval\", \"acceptanceCriteria\": [\"Pkg.test() passes\", \"only change is @views\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: OhMyThreads dep, alias_A weight solves, tmap build loop (Finding 1)",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Halve the build solve loop's allocations (LinearSolve's internal copy of every patch's kernel matrix) and migrate the loop to OhMyThreads tmap; measured together: 0.241 s / 41 % GC / 1047 MiB → 0.199 s / 28 % GC / 564 MiB with exactly identical weights.\n\n**Files:**\n- Modify: `Project.toml` (add OhMyThreads = \"67456a42-1dca-4109-a031-0a68de7e3ad5\" to deps, \"0.8\" to compat)\n- Modify: `src/ScatteredInterpolation.jl:3` (add `using OhMyThreads: tmap, index_chunks`)\n- Modify: `src/rbf.jl` (`_initsolve` gains `; aliasA = false` kwarg passing `alias_A = aliasA` to init; both `solveForWeights` methods pass `aliasA = true` for the A cache, cacheB stays default; `interpolate` copies A before solving only when `returnRBFmatrix = true` and returns that copy)\n- Modify: `src/pum.jl:439-452` (build solve loop → `tmap(patchpoints) do idxs ... end` inside `withpinnedblas`, keep the narrowing comprehension)\n\n**Acceptance Criteria:**\n- [ ] Pkg.test() passes\n- [ ] rippa.jl call sites keep default aliasA = false (gatedloocvscore reads opnorm(A,1) after solving)\n- [ ] interpolate(...; returnRBFmatrix = true) returns the assembled un-factorized matrix (spot-check: symmetric, unit diagonal for Multiquadratic)\n\n**Verify:** Pkg.test() via mcp__julia__julia_eval → pass; returnRBFmatrix spot-check from plan Task 3 Step 6 prints `symmetric: true | diag ones: true`.\n\n**Steps:** Exact code for every edit is in plan Task 3 Steps 1-5. Then test (Step 6) and commit (Step 7).\n\n```json:metadata\n{\"files\": [\"Project.toml\", \"src/ScatteredInterpolation.jl\", \"src/rbf.jl\", \"src/pum.jl\"], \"verifyCommand\": \"Pkg.test() via mcp__julia__julia_eval; returnRBFmatrix spot-check returns symmetric matrix\", \"acceptanceCriteria\": [\"Pkg.test() passes\", \"rippa call sites keep aliasA=false\", \"returnRBFmatrix returns un-factorized matrix\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Threaded patch assignment (Finding 3)",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Rewrite `assignpatches` to batch cell centers into one matrix and chunk the range queries across threads (standalone measured 49 → 22-34 ms; verified identical output at 3D and 6D).\n\n**Files:**\n- Modify: `src/pum.jl:74-99` (`assignpatches`)\n\n**Acceptance Criteria:**\n- [ ] Pkg.test() passes\n- [ ] No Threads.@threads in the new code; tmap over index_chunks(1:ncell; n = 8 * Threads.nthreads()), each task returning its own chunk's inrange results; reduce(vcat, parts); filter non-empty, sort! in place, gather kept centers\n\n**Verify:** Pkg.test() via mcp__julia__julia_eval → all tests pass.\n\n**Steps:** Replace the whole function body with the complete code in plan Task 4 Step 1 (builds `allcenters::Matrix{T}(undef, D, ncell)` from `centerof`, drops the per-cell `collect`). Test, commit with the plan's message.\n\n```json:metadata\n{\"files\": [\"src/pum.jl\"], \"verifyCommand\": \"Pkg.test() via mcp__julia__julia_eval\", \"acceptanceCriteria\": [\"Pkg.test() passes\", \"tmap over index_chunks, no Threads.@threads\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Evaluate restructure (Finding 2)",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Thread the candidate query, build exact-size per-patch buffers (count-then-fill), migrate pass 2 to tmap, and drop two forced copies — measured together: evaluate 0.145 → 0.086 s (3D), 3.27 → 1.90 s (6D), outputs bit-identical.\n\n**Files:**\n- Modify: `src/pum.jl:459-541` (`evaluate(::PartitionOfUnityInterpolant, ...)`)\n\n**Acceptance Criteria:**\n- [ ] Pkg.test() passes\n- [ ] Pass 1 candidate query threaded via tmap over index_chunks; per-patch buffers count-then-fill with resize! trim; no push! growth\n- [ ] convert(Matrix{T}, ...) used instead of the Matrix{T}(...) constructor for the query matrix and the fallback branch\n- [ ] Pass 3 scatter and normalization logic unchanged\n\n**Verify:** Pkg.test() via mcp__julia__julia_eval → all tests pass (PUM tests cover exactness at nodes, matrix samples, mixed eltypes, uncovered-query fallback).\n\n**Steps:** Replace the whole evaluate method with the complete code in plan Task 5 Step 1 (candidate counts are an upper bound → resize! after the guarded fill; pass 2 skips the Matrix{Tout} conversion when eltype already matches since reshape does not copy). Test, commit with the plan's message.\n\n```json:metadata\n{\"files\": [\"src/pum.jl\"], \"verifyCommand\": \"Pkg.test() via mcp__julia__julia_eval\", \"acceptanceCriteria\": [\"Pkg.test() passes\", \"pass 1 threaded + count-then-fill\", \"convert instead of Matrix{T} constructor\", \"pass 3 unchanged\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: Stored bounding box in addpoints!, tmap re-solve loop (Finding 4)",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Stop addpoints! from scanning all stored points for the bounding box on every call (0.69 ms of a 2.43 ms 10-point insert at n = 100k), and migrate its re-solve loop to tmap per the threading policy.\n\n**Files:**\n- Modify: `src/pum.jl` — `PartitionOfUnityInterpolant` struct (insert `lo::Vector{T}` / `hi::Vector{T}` fields after `samples::S`), the constructor call in `interpolate` (pass `vec(minimum(pts, dims = 2))`, `vec(maximum(pts, dims = 2))` in the new positions), and `addpoints!` (use `itp.lo`/`itp.hi`; re-solve via tmap with sequential write-back)\n\n**Acceptance Criteria:**\n- [ ] Pkg.test() passes (existing tests cover out-of-bbox rejection and post-insert exactness)\n- [ ] addpoints! no longer computes minimum/maximum over itp.points\n- [ ] Re-solve loop uses tmap; results written back by index sequentially\n\n**Verify:** Pkg.test() via mcp__julia__julia_eval → all tests pass.\n\n**Steps:** Exact code for all four edits in plan Task 6 Steps 1-4. Test, commit with the plan's message.\n\n```json:metadata\n{\"files\": [\"src/pum.jl\"], \"verifyCommand\": \"Pkg.test() via mcp__julia__julia_eval\", \"acceptanceCriteria\": [\"Pkg.test() passes\", \"no min/max scan in addpoints!\", \"re-solve loop via tmap\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Target-scale benchmark validation",
+      "status": "pending",
+      "blockedBy": [2, 6],
+      "description": "**Goal:** Measure the finished branch against the spec's performance targets at 3D and 6D target scale and record the results.\n\n**Files:**\n- Modify: `docs/superpowers/plans/2026-07-05-perf-improvements.md` (append results under \"Benchmark results\")\n\n**Acceptance Criteria:**\n- [ ] 3D build ≤ 0.16 s, 3D evaluate ≤ 0.10 s, 6D build ≤ 5.0 s, 6D evaluate ≤ 2.1 s (scale windows proportionally if Task 1 found the machine off the review baseline)\n- [ ] Results table recorded in the plan file\n- [ ] If any budget is missed: do NOT tune ad hoc — record measured numbers, attribute the miss against the per-finding phase timings in docs/perf-review-2026-07-05.md, and report back for a decision\n\n**Verify:** 3D script (plan Task 1 Step 1) and 6D script (plan Task 7 Step 2) via mcp__julia__julia_eval; all four numbers within budget; patches 12167 (3D) / 262144 (6D).\n\n**Steps:** Run both benchmark scripts verbatim from the plan, fill in the results table under \"Benchmark results → Task 7 final\", commit the plan file.\n\n```json:metadata\n{\"files\": [\"docs/superpowers/plans/2026-07-05-perf-improvements.md\"], \"verifyCommand\": \"3D+6D benchmark scripts via mcp__julia__julia_eval; budgets 0.16/0.10/5.0/2.1 s\", \"acceptanceCriteria\": [\"all four budgets met or miss documented with attribution\", \"results recorded in plan\"], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-05T00:00:00Z"
+}
