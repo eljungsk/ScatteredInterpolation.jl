@@ -436,20 +436,18 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
         end
     end
 
-    # Local solves are independent — thread across patches. Each per-patch system is
-    # small (~pointsperpatch), where single-threaded BLAS per task is appropriate.
-    P = length(patchpoints)
-    locals = Vector{RadialBasisInterpolant}(undef, P)
-    withpinnedblas() do
-        Threads.@threads for p in 1:P
-            idxs = patchpoints[p]
-            locals[p] = solvelocal(pum, pts[:, idxs], patchsamples(samples, idxs),
-                                   patchsmooth(smooth, idxs), metric, linsolve)
+    # Local solves are independent — thread across patches with tmap (each task
+    # returns its result; no shared writes). Each per-patch system is small
+    # (~pointsperpatch), where single-threaded BLAS per task is appropriate.
+    solved = withpinnedblas() do
+        tmap(patchpoints) do idxs
+            solvelocal(pum, pts[:, idxs], patchsamples(samples, idxs),
+                       patchsmooth(smooth, idxs), metric, linsolve)
         end
     end
     # Narrow to the concrete local-interpolant type (homogeneous in practice) so the
     # evaluation hot path dispatches statically.
-    locals = [l for l in locals]
+    locals = [l for l in solved]
 
     PartitionOfUnityInterpolant(grid, patchpoints, locals, centers, KDTree(centers),
                                 weight, pts, collect(samples), pum,

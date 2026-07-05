@@ -1,6 +1,7 @@
 module ScatteredInterpolation
 
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
+using OhMyThreads: tmap, index_chunks
 import KernelFunctions
 
 export interpolate,

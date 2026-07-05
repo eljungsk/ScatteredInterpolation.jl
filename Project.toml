@@ -9,6 +9,7 @@ KernelFunctions = "ec8451be-7e33-11e9-00cf-bbf324bd1392"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 
 [compat]
 Combinatorics = "1"
@@ -17,6 +18,7 @@ IterativeSolvers = "0.9"
 KernelFunctions = "0.11"
 LinearSolve = "2"
 NearestNeighbors = "0.4"
+OhMyThreads = "0.8"
 julia = "1.10"
 
 [extras]
