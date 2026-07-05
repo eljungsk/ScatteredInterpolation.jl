@@ -1018,6 +1018,31 @@ git commit -m "Re-tune affected patches in addpoints! under tune = :loocv"
 
 ---
 
+## Task 6/7 amendment: rare environment-level crash, unrelated to LOOCV logic
+
+While stress-testing Task 7's bordered tuning under `Pkg.test`, one run crashed
+with `SIGSEGV` inside OpenBLAS's `dgetrs_`, reached via `ldiv!` →
+`LinearSolve.solve!` → **`_solve!` in `rbf.jl`** (the plain, pre-existing RBF
+solve path used by every `interpolate()` call, tuned or not) → `solvelocal` →
+`addpoints!`'s threaded re-solve loop. ~108M allocations preceded the crash —
+the same signature as the Task 6 heap-corruption crash, and consistent with the
+same underlying cause: this environment's OpenBLAS build was compiled with a
+thread-count limit that Julia's `Threads.nthreads()` exceeds (the recurring
+"precompiled NUM_THREADS exceeded, adding auxiliary array for thread metadata...
+may still crash" warning). Re-ran immediately after with no code changes: 387/387
+passed cleanly. This is a rare, non-deterministic race in the
+environment/OpenBLAS-Julia thread-count interaction, not a regression introduced
+by Task 7 — it manifested in code this plan didn't touch. The Task 6 fix (reused
+`lu!` scratch buffer, cutting allocation volume in the *new* LOOCV code) reduces
+how often the overall test run's allocation pressure reaches the danger zone, but
+cannot eliminate a crash occurring in the untouched plain-solve path. Flagged
+here as a known environment risk rather than something this plan can close;
+mitigations (if ever needed) live outside this codebase — rebuilding OpenBLAS
+with a larger thread-count limit, or capping `Threads.nthreads()`/
+`OMP_NUM_THREADS` for this environment specifically.
+
+---
+
 ### Task 7: Bordered-system tuning for `GeneralizedMultiquadratic`
 
 **Goal:** `tune = :loocv` works for `GeneralizedMultiquadratic` by scoring candidates on the polynomial-augmented saddle system `M = [A P; Pᵀ 0]` (the bordered `loocvscore` from Task 2).

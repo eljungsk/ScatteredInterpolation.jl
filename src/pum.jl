@@ -309,6 +309,70 @@ function tuneshape(kernel::RadialBasisFunction, pts::AbstractMatrix,
     return withshape(kernel, εbest)
 end
 
+# Bordered variant of the rcond gate above, for polynomial-augmented saddle
+# systems M = [A P; Pᵀ 0] (GeneralizedMultiquadratic): identical reasoning, just
+# using the bordered `loocvscore(M, F, n)` and computing rcond on the full
+# (m = n + npoly)-sized M.
+function safeloocvscore(Mbuf::AbstractMatrix, M::AbstractMatrix,
+                        F::AbstractVecOrMat, n::Integer)
+    Mbuf .= M
+    Fct = try
+        lu!(Mbuf)
+    catch err
+        err isa SINGULAR_EXCEPTIONS && return Inf
+        rethrow()
+    end
+    anorm = opnorm(M, 1)
+    rcond = LinearAlgebra.LAPACK.gecon!('1', Fct.factors, anorm)
+    rcond < RCOND_THRESHOLD && return Inf
+    return loocvscore(M, F, n)
+end
+
+# Bordered variant of `tuneshape` for polynomial-augmented kernels
+# (GeneralizedMultiquadratic): candidates (and the caller's own kernel, as the
+# anchor) are scored on the saddle system M = [A P; Pᵀ 0] via the bordered
+# safeloocvscore/loocvscore above. The polynomial block P is ε-independent and
+# assembled once; each candidate only refills the A-block view of M in place.
+function tuneshape(kernel::GeneralizedRadialBasisFunction, pts::AbstractMatrix,
+                   samples::AbstractVecOrMat, smooth, metric)
+    h = meannndist(pts)
+    h > 0 || return kernel   # no length scale to derive ε from
+    cmid = LOOCV_CANDIDATES[(length(LOOCV_CANDIDATES) + 1) ÷ 2]
+    np = size(pts, 2)
+    np >= 3 || return withshape(kernel, cmid / h)
+
+    R = pairwise(metric, pts, dims = 2)
+    P = generateMultivariatePolynomial(pts, kernel.degree)
+    npoly = size(P, 2)
+    m = np + npoly
+    M = zeros(promote_type(eltype(R), eltype(P)), m, m)
+    M[1:np, (np + 1):m] .= P
+    M[(np + 1):m, 1:np] .= P'
+    Mbuf = similar(M)
+    F = samples isa AbstractVector ?
+        vcat(samples, zeros(eltype(samples), npoly)) :
+        vcat(samples, zeros(eltype(samples), npoly, size(samples, 2)))
+
+    Ablock = view(M, 1:np, 1:np)
+    Ablock .= kernel.(R)
+    addSmoothing!(Ablock, smooth)
+    best = loocvscore(M, F, np)   # ungated: the anchor is never rejected as unscoreable
+    εbest = kernel.ε
+
+    for c in LOOCV_CANDIDATES
+        ε = c / h
+        ϕ = withshape(kernel, ε)
+        Ablock .= ϕ.(R)
+        addSmoothing!(Ablock, smooth)
+        s = safeloocvscore(Mbuf, M, F, np)   # gated: only a trustworthy score may win
+        if s < best
+            best = s
+            εbest = ε
+        end
+    end
+    return withshape(kernel, εbest)
+end
+
 # Solve one patch's local system, tuning the kernel's shape parameter first when
 # requested. Shared by the initial build and addpoints! re-solves.
 function solvelocal(pum::PartitionOfUnity, patchpts, psamples, psmooth, metric,

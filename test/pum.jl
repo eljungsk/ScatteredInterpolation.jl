@@ -498,4 +498,16 @@ end
                                            pointsperpatch = 2), pts, vals)
         @test evaluate(itp, pts) ≈ vals atol = 1e-8
     end
+
+    @testset "GeneralizedMultiquadratic bordered tuning" begin
+        pts = kroneckerpoints(2, 300)
+        vals = [prod(sinpi, x) for x in eachcol(pts)]
+        itp = interpolate(PartitionOfUnity(GeneralizedMultiquadratic(1, 1/2, 2);
+                                           tune = :loocv, pointsperpatch = 60),
+                          pts, vals)
+        # Same atol rationale as the untuned GMQ exactness test above (array-norm ≈)
+        @test evaluate(itp, pts) ≈ vals atol = 1e-5
+        @test all(l -> l.rbf isa GeneralizedMultiquadratic, itp.locals)
+        @test all(l -> l.rbf.β == 1/2 && l.rbf.degree == 2, itp.locals)
+    end
 end
