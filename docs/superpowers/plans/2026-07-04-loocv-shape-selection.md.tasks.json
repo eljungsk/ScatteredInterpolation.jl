@@ -51,7 +51,7 @@
     {
       "id": 7,
       "subject": "Task 7: Bordered-system tuning for GeneralizedMultiquadratic",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         5
       ],
