@@ -4,6 +4,14 @@
 **Branch:** to be created from `linearsolve-v2` (depends on its LinearSolve helpers)
 **Status:** Approved design, pending implementation plan
 
+> **Implementation amendments (2026-07-04):** (1) The per-cell candidate patch lists
+> ("fixed stencil" lookup, §3.2) were replaced by exact `inrange` queries against a
+> KDTree of patch centers — the cell lists are dense in higher dimensions (the patch
+> radius spans about two cells per dimension), making their construction quadratic in
+> the patch count. (2) The grid cell count is calibrated by the ball/cell volume ratio
+> so mean patch occupancy tracks `pointsperpatch` in any dimension. (3) Per-patch
+> solves pin BLAS to one thread while the patch-level threads are active.
+
 ## Goal
 
 Add an interpolation method that scales to large scattered datasets (10⁵–10⁷ points) in

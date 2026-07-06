@@ -4,13 +4,13 @@
     {
       "id": 1,
       "subject": "Task 1: Wendland kernels via KernelFunctions.jl + support_radius trait",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** New `Wendland` RBF type wrapping `KernelFunctions.PiecewisePolynomialKernel`, usable in the existing dense RBF path, plus the `support_radius` trait on all RBF types (the future sparse-path dispatch hook).\n\n**Files:**\n- Modify: `Project.toml` (add KernelFunctions to `[deps]` and `[compat]`)\n- Create: `src/wendland.jl`\n- Modify: `src/ScatteredInterpolation.jl` (import + include)\n- Create: `test/wendland.jl`\n- Modify: `test/runtests.jl` (include the new test file)\n\n**Acceptance Criteria:**\n- [ ] `Wendland(3, 1)(r)` matches `(1-r)^4 * (4r+1)` for `r in [0,1]` and is `0.0` for `r >= 1`\n- [ ] `Wendland` constructor rejects `degree` outside 0:3, `dim < 1`, `eps <= 0` with `ArgumentError`\n- [ ] `support_radius(Wendland(2,1; ε=2)) ≈ 0.5`; `support_radius` of every existing kernel is `Inf`\n- [ ] `interpolate(Wendland(2,1; ε=0.5), points, data)` reproduces `data` at the nodes (dense path)\n- [ ] Full test suite passes\n\n**Verify:** via mcp__julia__julia_eval: `import Pkg; Pkg.test(\"ScatteredInterpolation\")` -> all pass\n\n**Steps:** Full code in plan Task 1 (docs/superpowers/plans/2026-07-04-rbf-pum.md): add dep (UUID ec8451be-7e33-11e9-00cf-bbf324bd1392, compat \"0.11\"), write failing tests in test/wendland.jl, implement src/wendland.jl (struct Wendland{K,T} <: RadialBasisFunction; (w::Wendland)(r) = KernelFunctions.kappa(w.kernel, w.ε * r); support_radius), wire `import KernelFunctions` + include after rbf.jl, test-pass, commit.\n```json:metadata\n{\"files\": [\"Project.toml\", \"src/wendland.jl\", \"src/ScatteredInterpolation.jl\", \"test/wendland.jl\", \"test/runtests.jl\"], \"verifyCommand\": \"mcp__julia__julia_eval: import Pkg; Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"Wendland(3,1) matches (1-r)^4(4r+1) on [0,1], 0 beyond\", \"constructor validation ArgumentErrors\", \"support_radius correct for Wendland and Inf for existing kernels\", \"dense-path interpolation exact at nodes\", \"full suite passes\"], \"modelTier\": \"standard\"}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Patch grid construction and point assignment",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -19,7 +19,7 @@
     {
       "id": 3,
       "subject": "Task 3: PartitionOfUnity method type and interpolate (threaded build)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -28,7 +28,7 @@
     {
       "id": 4,
       "subject": "Task 4: evaluate for PUM (batched, threaded, with fallback)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         3
       ],
@@ -37,7 +37,7 @@
     {
       "id": 5,
       "subject": "Task 5: addpoints! incremental insertion",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         4
       ],
@@ -46,12 +46,12 @@
     {
       "id": 6,
       "subject": "Task 6: User documentation",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         5
       ],
       "description": "**Goal:** Document the new method and kernels in the manual, matching the existing style: methods page section with math, API page entries, and updated method count in the intro texts.\n\n**Files:**\n- Modify: `docs/src/methods.md`\n- Modify: `docs/src/api.md`\n- Modify: `docs/src/index.md` (only if it enumerates the methods - check)\n\n**Acceptance Criteria:**\n- [ ] `methods.md` has a \"Partition of Unity\" section with the blend formula, patch construction description, parameter guidance, smoothing/exactness note, extrapolation behavior, and `addpoints!` with its bounding-box limitation\n- [ ] `methods.md` documents the `Wendland` basis function in the \"Available basis functions\" list\n- [ ] `api.md` includes `PartitionOfUnity`, `Wendland`, and `addpoints!`\n- [ ] No stale \"three methods\" phrasing remains anywhere in `docs/src/`\n- [ ] Documentation builds without cross-reference errors\n\n**Verify:** via mcp__julia__julia_eval: docs build (Pkg.activate(\"docs\"); Pkg.develop(path=\".\"); Pkg.instantiate(); include(\"docs/make.jl\")) completes without @ref/docstring warnings for new names; then Pkg.activate(\".\") and Pkg.test(\"ScatteredInterpolation\") -> all pass\n\n**Steps:** Full markdown content in plan Task 6: update intro to four methods, add Wendland bullet to basis-function list, insert \"Radial Basis Function Partition of Unity\" section (blend formula math, exactness argument, parameter guidance, threading note, extrapolation, addpoints! usage), update api.md @docs blocks (addpoints!, Wendland, PartitionOfUnity section), grep docs/src for stale \"three\", build docs, run full suite, commit.\n```json:metadata\n{\"files\": [\"docs/src/methods.md\", \"docs/src/api.md\", \"docs/src/index.md\"], \"verifyCommand\": \"mcp__julia__julia_eval: docs build via include(\\\"docs/make.jl\\\") in docs env, then Pkg.test(\\\"ScatteredInterpolation\\\")\", \"acceptanceCriteria\": [\"PUM section with formula and behavior notes\", \"Wendland in basis function list\", \"api.md lists PartitionOfUnity, Wendland, addpoints!\", \"no stale method count\", \"docs build clean\"], \"modelTier\": \"mechanical\"}\n```"
     }
   ],
-  "lastUpdated": "2026-07-04T11:48:20.588433"
+  "lastUpdated": "2026-07-04T20:16:16.571293"
 }

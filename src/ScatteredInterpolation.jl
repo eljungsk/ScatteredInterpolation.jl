@@ -1,6 +1,8 @@
 module ScatteredInterpolation
 
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
+using OhMyThreads: tmap, index_chunks
+import KernelFunctions
 
 export interpolate,
     evaluate
@@ -9,6 +11,9 @@ abstract type ScatteredInterpolant end
 abstract type InterpolationMethod end
 
 include("./rbf.jl")
+include("./rippa.jl")
+include("./wendland.jl")
+include("./pum.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
 

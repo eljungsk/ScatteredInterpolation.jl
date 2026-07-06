@@ -188,6 +188,24 @@ function (rbf::GeneralizedPolyharmonic)(r)
     expr
 end
 
+# --- Shape-parameter traits ------------------------------------------------------
+# Used by the partition of unity method's LOOCV tuning (tune = :loocv): hasshape says
+# whether a kernel has a tunable shape parameter ε, and withshape rebuilds the kernel
+# with a new one, preserving all other parameters. Polyharmonic-family kernels are
+# scale-free and have no shape parameter.
+hasshape(::AbstractRadialBasisFunction) = false
+hasshape(::Union{Gaussian, Multiquadratic, InverseQuadratic, InverseMultiquadratic,
+                 GeneralizedMultiquadratic}) = true
+
+withshape(::Gaussian, ε) = Gaussian(ε)
+withshape(::Multiquadratic, ε) = Multiquadratic(ε)
+withshape(::InverseQuadratic, ε) = InverseQuadratic(ε)
+withshape(::InverseMultiquadratic, ε) = InverseMultiquadratic(ε)
+withshape(k::GeneralizedMultiquadratic, ε) = GeneralizedMultiquadratic(ε, k.β, k.degree)
+
+# (Wendland is defined in src/wendland.jl, which is included after src/rbf.jl — its
+# methods cannot live in this Union.)
+
 abstract type RadialBasisInterpolant <: ScatteredInterpolant end
 
 struct RBFInterpolant{T1 <: AbstractArray, T2 <: AbstractMatrix{<:Real}, F, M} <: RadialBasisInterpolant
@@ -223,12 +241,16 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
     
     A = evaluateRBF!(A, rbf, smooth)
 
+    # The weight solve factorizes A in place (aliasA); keep an untouched copy only
+    # when the caller asked for the matrix back.
+    Aout = returnRBFmatrix ? copy(A) : nothing
+
     # Solve for the weights
     itp = solveForWeights(A, points, samples, rbf, metric; linsolve = linsolve)
 
     # Create and return an interpolation object
     if returnRBFmatrix    # Return matrix A
-        return itp, A
+        return itp, Aout
     else
         return itp
     end
@@ -273,7 +295,12 @@ end
 # Build a reusable LinearSolve cache for matrix `A` and algorithm `alg`
 # (`nothing` selects LinearSolve's default algorithm). The factorization is
 # computed on the first solve and reused for subsequent right-hand sides.
-_initsolve(A, alg) = init(LinearProblem(A, zeros(eltype(A), size(A, 1))), alg)
+# `aliasA = true` lets LinearSolve factorize the caller's matrix in place instead
+# of copying it first — only for call sites that never read A after the first
+# solve. The default stays false: the LOOCV scoring paths (src/rippa.jl) compute
+# opnorm(A, 1) after solving and would read LU-overwritten storage otherwise.
+_initsolve(A, alg; aliasA = false) =
+    init(LinearProblem(A, zeros(eltype(A), size(A, 1))), alg; alias_A = aliasA)
 
 # Point the cache at a new right-hand side without invalidating the cached
 # factorization, then return the cache for chaining. LinearSolve's cache does not
@@ -312,7 +339,7 @@ end
 @inline function solveForWeights(A, points, samples,
                                     rbf::Union{T, AbstractVector{T}} where T <: RadialBasisFunction,
                                     metric; linsolve = nothing)
-    cache = _initsolve(A, linsolve)
+    cache = _initsolve(A, linsolve; aliasA = true)
     w = _solve!(cache, samples)
     RBFInterpolant(w, points, rbf, metric)
 end
@@ -325,7 +352,7 @@ end
     # Blocked (Schur-complement) system. One reusable cache factorizes A once and
     # is reused for every RHS (P, samples, and the final combined RHS); the small
     # npoly×npoly Schur system uses LinearSolve's default algorithm.
-    cacheA = _initsolve(A, linsolve)
+    cacheA = _initsolve(A, linsolve; aliasA = true)
     AinvP  = _solve!(cacheA, P)
     Ainvs  = _solve!(cacheA, samples)
 
@@ -377,7 +404,7 @@ function generateMultivariatePolynomial(points::AbstractArray{<:Real, 2}, degree
     for order = 1:degree
         for combination in with_replacement_combinations(1:nDimensions, order)
             for var in combination
-                P[:, position] .*= points[var, :]
+                @views P[:, position] .*= points[var, :]
             end
             position += 1
         end

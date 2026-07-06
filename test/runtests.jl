@@ -15,4 +15,7 @@ perturbation(sz; scale = 5e-4) = reshape([scale * sinpi((2i + 1) / 7) for i in 1
     include("rbf.jl")
     include("idw.jl")
     include("nearestNeighbor.jl")
+    include("wendland.jl")
+    include("rippa.jl")
+    include("pum.jl")
 end

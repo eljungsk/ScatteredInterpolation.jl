@@ -1,3 +1,4 @@
+using ScatteredInterpolation: hasshape, withshape
 
 # Define some points and data in 2D. At least 6 points in general position are used so
 # that the degree-2 generalized RBFs below have a full-column-rank polynomial block
@@ -276,6 +277,26 @@ radialBasisFunctions = (Gaussian(2),
     @testset "Invalid input" begin
         # Number of samples must match the number of points (5 columns here)
         @test_throws DimensionMismatch interpolate(Gaussian(1), arrayPoints, data[1:3])
+    end
+
+    @testset "Shape parameter traits" begin
+        @test hasshape(Gaussian(2))
+        @test hasshape(Multiquadratic())
+        @test hasshape(InverseQuadratic())
+        @test hasshape(InverseMultiquadratic())
+        @test hasshape(GeneralizedMultiquadratic(1, 1/2, 2))
+        @test !hasshape(Polyharmonic(3))
+        @test !hasshape(ThinPlate())
+        @test !hasshape(GeneralizedPolyharmonic(3, 1))
+
+        @test withshape(Gaussian(2), 4.0) === Gaussian(4.0)
+        @test withshape(Multiquadratic(), 3.0) === Multiquadratic(3.0)
+        @test withshape(InverseQuadratic(), 3.0) === InverseQuadratic(3.0)
+        @test withshape(InverseMultiquadratic(), 3.0) === InverseMultiquadratic(3.0)
+        gmq = withshape(GeneralizedMultiquadratic(1, 1/2, 2), 5.0)
+        @test gmq.ε == 5.0
+        @test gmq.β == 1/2
+        @test gmq.degree == 2
     end
 
 end
