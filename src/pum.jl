@@ -473,12 +473,29 @@ function evaluate(itp::PartitionOfUnityInterpolant{T, D},
     Tw = float(promote_type(eltype(points), T))
     Tout = promote_type(Tw, eltype(itp.samples))
 
-    # Pass 1: per query, find the covering patches with one batched range query
-    # against the patch-center tree, then compute raw PU weights, grouped by patch so
-    # pass 2 can evaluate each local interpolant on one batched block.
-    candidates = inrange(itp.centertree, Matrix{T}(points), grid.radius)
-    patchq = [Int[] for _ in 1:P]
-    patchw = [Tw[] for _ in 1:P]
+    # Pass 1: per query, find the covering patches with range queries against the
+    # patch-center tree — chunked across threads with tmap (each task returns its
+    # own chunk's lists) — then compute raw PU weights, grouped by patch so pass 2
+    # can evaluate each local interpolant on one batched block. convert, not the
+    # Matrix{T} constructor: the constructor always copies, convert is a no-op for
+    # the common already-Matrix{T} input.
+    qmat = convert(Matrix{T}, points)
+    chunks = index_chunks(1:nq; n = 8 * Threads.nthreads())
+    parts = tmap(chunks) do rng
+        inrange(itp.centertree, qmat[:, rng], grid.radius)
+    end
+    candidates = reduce(vcat, parts)
+
+    # Count-then-fill: exact-size per-patch buffers instead of push!-grown vectors.
+    # The candidate counts are an upper bound; entries dropped by the radius and
+    # weight guards below are trimmed off with resize! afterwards.
+    counts = zeros(Int, P)
+    for q in 1:nq, p in candidates[q]
+        counts[p] += 1
+    end
+    patchq = [Vector{Int}(undef, counts[p]) for p in 1:P]
+    patchw = [Vector{Tw}(undef, counts[p]) for p in 1:P]
+    fill!(counts, 0)
     wsum = zeros(Tw, nq)
     for q in 1:nq
         x = view(points, :, q)
@@ -491,24 +508,30 @@ function evaluate(itp::PartitionOfUnityInterpolant{T, D},
             r < grid.radius || continue
             ω = Tw(itp.weight(r / grid.radius))
             ω > 0 || continue
-            push!(patchq[p], q)
-            push!(patchw[p], ω)
+            k = (counts[p] += 1)
+            patchq[p][k] = q
+            patchw[p][k] = ω
             wsum[q] += ω
         end
     end
+    for p in 1:P
+        resize!(patchq[p], counts[p])
+        resize!(patchw[p], counts[p])
+    end
 
-    # Pass 2 (threaded, BLAS pinned like the build): one batched evaluation per
-    # patch — GEMM-shaped work with no shared writes. Local evaluate returns a
-    # Vector for vector samples; normalize to a matrix so the scatter below is
-    # shape-agnostic.
-    results = Vector{Matrix{Tout}}(undef, P)
-    withpinnedblas() do
-        Threads.@threads for p in 1:P
+    # Pass 2 (threaded via tmap, BLAS pinned like the build): one batched evaluation
+    # per patch — GEMM-shaped work, each task returning its own block. Local
+    # evaluate returns a Vector for vector samples; normalize to a matrix so the
+    # scatter below is shape-agnostic (reshape does not copy; the eltype conversion
+    # only pays a copy in the mixed-eltype case).
+    results = withpinnedblas() do
+        tmap(1:P) do p
             if isempty(patchq[p])
-                results[p] = Matrix{Tout}(undef, 0, m)
+                Matrix{Tout}(undef, 0, m)
             else
                 v = evaluate(itp.locals[p], points[:, patchq[p]])
-                results[p] = Matrix{Tout}(reshape(v, length(patchq[p]), m))
+                R = reshape(v, length(patchq[p]), m)
+                eltype(R) === Tout ? R : Matrix{Tout}(R)
             end
         end
     end
@@ -535,7 +558,7 @@ function evaluate(itp::PartitionOfUnityInterpolant{T, D},
             @views out[q, :] ./= wsum[q]
         else
             p, _ = nn(itp.centertree, Vector{T}(view(points, :, q)))
-            v = evaluate(itp.locals[p], Matrix{T}(reshape(points[:, q], D, 1)))
+            v = evaluate(itp.locals[p], convert(Matrix{T}, reshape(points[:, q], D, 1)))
             @views out[q, :] .= vec(v)
         end
     end
