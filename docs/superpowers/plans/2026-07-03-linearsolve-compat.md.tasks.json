@@ -1,0 +1,33 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-03-linearsolve-compat.md",
+  "tasks": [
+    {
+      "id": 7,
+      "subject": "Task 1: Add LinearSolve dependency and bump compat",
+      "status": "pending",
+      "description": "**Goal:** Declare LinearSolve (and test-only IterativeSolvers), raise the Julia floor to 1.10, and bump the package version.\n\n**Files:**\n- Modify: Project.toml\n\n**Acceptance Criteria:**\n- LinearSolve in [deps] and [compat] (\"2\")\n- IterativeSolvers in [extras], [compat] (\"0.9\"), and the test target\n- julia = \"1.10\"\n- version = \"0.4.0\"\n- resolve + instantiate succeeds\n\n**Verify:** julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); using ScatteredInterpolation, LinearSolve' -> exits 0\n\n```json:metadata\n{\"files\": [\"Project.toml\"], \"verifyCommand\": \"julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); using ScatteredInterpolation, LinearSolve'\", \"acceptanceCriteria\": [\"LinearSolve in deps+compat\", \"IterativeSolvers in extras+compat+test target\", \"julia=1.10\", \"version=0.4.0\", \"resolve+instantiate succeeds\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 2: Add the LinearSolve solve helpers",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Add internal _initsolve, _setb!, and _solve! helpers that wrap a reusable LinearSolve cache and solve vector or matrix right-hand sides.\n\n**Files:**\n- Modify: src/ScatteredInterpolation.jl:3 (add LinearSolve to using)\n- Modify: src/rbf.jl (helpers above solveForWeights, ~line 270)\n- Test: test/rbf.jl (new @testset \"Solve helpers\")\n\n**Acceptance Criteria:**\n- _initsolve(A, nothing) builds a cache whose first _solve! solves A x = b\n- _solve!(cache, b::Vector) returns x with A*x approx b\n- _solve!(cache, B::Matrix) returns X with A*X approx B (column-loop)\n- second _solve! on same cache with different RHS still solves (factorization reuse)\n\n**Verify:** julia --project=. -e 'include(\"test/runtests.jl\")' -> Solve helpers testset passes\n\n```json:metadata\n{\"files\": [\"src/ScatteredInterpolation.jl\", \"src/rbf.jl\", \"test/rbf.jl\"], \"verifyCommand\": \"julia --project=. -e 'include(\\\"test/runtests.jl\\\")'\", \"acceptanceCriteria\": [\"_initsolve builds cache\", \"vector RHS solves\", \"matrix RHS column-loop solves\", \"factorization reuse across RHS\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 3: Route interpolate and solveForWeights through LinearSolve",
+      "status": "pending",
+      "blockedBy": [8],
+      "description": "**Goal:** Add the linsolve kwarg to interpolate and rewrite both solveForWeights methods to use the helpers, keeping default behavior identical.\n\n**Files:**\n- Modify: src/rbf.jl:210-214 (interpolate signature), src/rbf.jl:226 (call site), src/rbf.jl:271-293 (both solveForWeights methods)\n- Modify: src/ScatteredInterpolation.jl:26 (interpolate docstring)\n- Test: test/rbf.jl (existing evaluation tests = default-path regression)\n\n**Acceptance Criteria:**\n- interpolate(...; linsolve = nothing) accepted and forwarded\n- plain-RBF solveForWeights uses _initsolve/_solve!\n- generalized-RBF solveForWeights reuses one cacheA for A, solves Schur with default alg\n- full existing test suite passes unchanged with default linsolve\n\n**Verify:** julia --project=. -e 'include(\"test/runtests.jl\")' -> all pre-existing testsets pass\n\n```json:metadata\n{\"files\": [\"src/rbf.jl\", \"src/ScatteredInterpolation.jl\"], \"verifyCommand\": \"julia --project=. -e 'include(\\\"test/runtests.jl\\\")'\", \"acceptanceCriteria\": [\"linsolve kwarg forwarded\", \"plain path uses helpers\", \"generalized path reuses cacheA + default-alg Schur\", \"existing suite green on default\"], \"modelTier\": \"standard\"}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 4: Algorithm-contract tests",
+      "status": "pending",
+      "blockedBy": [9],
+      "description": "**Goal:** Prove interpolate works across all four supported algorithms, including the multi-column matrix-RHS case that broke the previous attempt.\n\n**Files:**\n- Modify: test/runtests.jl:1 (add using LinearSolve, IterativeSolvers)\n- Modify: test/rbf.jl (new @testset \"Linear solver algorithms\")\n\n**Acceptance Criteria:**\n- parametrized over nothing, LUFactorization(), IterativeSolversJL_GMRES(), KrylovJL_GMRES()\n- plain RBF (Gaussian) reproduces data for every algorithm\n- generalized RBF (GeneralizedPolyharmonic) reproduces a linear field for every algorithm\n- multi-column samples (matrix RHS) reproduce each column for every algorithm\n- direct solvers use approx; iterative solvers use atol = 1e-6\n\n**Verify:** julia --project=. -e 'include(\"test/runtests.jl\")' -> Linear solver algorithms testset passes\n\n```json:metadata\n{\"files\": [\"test/runtests.jl\", \"test/rbf.jl\"], \"verifyCommand\": \"julia --project=. -e 'include(\\\"test/runtests.jl\\\")'\", \"acceptanceCriteria\": [\"4 algorithms parametrized\", \"plain RBF reproduces per alg\", \"generalized reproduces linear field per alg\", \"multi-column matrix RHS per alg\", \"per-alg tolerance\"], \"modelTier\": \"standard\"}\n```"
+    }
+  ],
+  "lastUpdated": "2026-07-03"
+}

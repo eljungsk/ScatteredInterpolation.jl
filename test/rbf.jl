@@ -1,3 +1,4 @@
+using ScatteredInterpolation: hasshape, withshape
 
 # Define some points and data in 2D. At least 6 points in general position are used so
 # that the degree-2 generalized RBFs below have a full-column-rank polynomial block
@@ -50,6 +51,25 @@ radialBasisFunctions = (Gaussian(2),
         @test GeneralizedPolyharmonic(2, 3).k == 2
         @test_throws AssertionError GeneralizedPolyharmonic(0, 2)
         @test_throws AssertionError GeneralizedPolyharmonic(-1, 2)
+    end
+
+    @testset "Solve helpers" begin
+        A = [4.0 1.0; 1.0 3.0]
+        cache = ScatteredInterpolation._initsolve(A, nothing)
+
+        b = [1.0, 2.0]
+        x = ScatteredInterpolation._solve!(cache, b)
+        @test A * x ≈ b
+
+        # Reuse the same cache (and its factorization) for a new RHS
+        b2 = [3.0, 4.0]
+        x2 = ScatteredInterpolation._solve!(cache, b2)
+        @test A * x2 ≈ b2
+
+        # Matrix RHS solved column by column
+        B = [1.0 3.0; 2.0 4.0]
+        X = ScatteredInterpolation._solve!(cache, B)
+        @test A * X ≈ B
     end
 
     @testset "Polyharmonic polynomial reproduction" begin
@@ -140,6 +160,42 @@ radialBasisFunctions = (Gaussian(2),
         @test ev ≈ multiData
     end
 
+    @testset "Linear solver algorithms" begin
+        # `nothing` and direct factorizations reach machine precision; iterative
+        # solvers only converge to a tolerance, so check them with a looser atol.
+        directAlgs   = (nothing, LUFactorization())
+        iterativeAlgs = (IterativeSolversJL_GMRES(), KrylovJL_GMRES())
+
+        # A linear field for the generalized-RBF reproduction check
+        linear = [2 + 3 * arrayPoints[1, i] - arrayPoints[2, i] for i in 1:size(arrayPoints, 2)]
+        query  = [0.3; 0.7]
+        truth  = 2 + 3 * 0.3 - 0.7
+
+        # Multi-column (matrix RHS) data — the regression guard for the old breakage
+        multiData = hcat(data, 2 .* data, -data)
+
+        @testset "algorithm = $(alg === nothing ? "default" : nameof(typeof(alg)))" for
+                (alg, tol) in (((a, nothing) for a in directAlgs)...,
+                               ((a, 1e-6) for a in iterativeAlgs)...)
+
+            approxeq(x, y) = tol === nothing ? isapprox(x, y) : isapprox(x, y; atol = tol)
+
+            # Plain RBF reproduces the data at the sample points
+            itp = interpolate(Gaussian(2), arrayPoints, data; linsolve = alg)
+            @test approxeq(evaluate(itp, arrayPoints), data)
+
+            # Generalized RBF reproduces a linear field
+            itpGen = interpolate(GeneralizedPolyharmonic(3, 2), arrayPoints, linear; linsolve = alg)
+            @test approxeq(evaluate(itpGen, query)[1], truth)
+
+            # Multi-column samples: each column recovered independently (matrix RHS)
+            itpMulti = interpolate(Gaussian(2), arrayPoints, multiData; linsolve = alg)
+            ev = evaluate(itpMulti, arrayPoints)
+            @test size(ev) == size(multiData)
+            @test approxeq(ev, multiData)
+        end
+    end
+
     @testset "Metric" for points in (arrayPoints, adjointPoints)
         r = Gaussian(2)
 
@@ -221,6 +277,26 @@ radialBasisFunctions = (Gaussian(2),
     @testset "Invalid input" begin
         # Number of samples must match the number of points (5 columns here)
         @test_throws DimensionMismatch interpolate(Gaussian(1), arrayPoints, data[1:3])
+    end
+
+    @testset "Shape parameter traits" begin
+        @test hasshape(Gaussian(2))
+        @test hasshape(Multiquadratic())
+        @test hasshape(InverseQuadratic())
+        @test hasshape(InverseMultiquadratic())
+        @test hasshape(GeneralizedMultiquadratic(1, 1/2, 2))
+        @test !hasshape(Polyharmonic(3))
+        @test !hasshape(ThinPlate())
+        @test !hasshape(GeneralizedPolyharmonic(3, 1))
+
+        @test withshape(Gaussian(2), 4.0) === Gaussian(4.0)
+        @test withshape(Multiquadratic(), 3.0) === Multiquadratic(3.0)
+        @test withshape(InverseQuadratic(), 3.0) === InverseQuadratic(3.0)
+        @test withshape(InverseMultiquadratic(), 3.0) === InverseMultiquadratic(3.0)
+        gmq = withshape(GeneralizedMultiquadratic(1, 1/2, 2), 5.0)
+        @test gmq.ε == 5.0
+        @test gmq.β == 1/2
+        @test gmq.degree == 2
     end
 
 end

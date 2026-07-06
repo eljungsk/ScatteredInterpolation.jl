@@ -7,3 +7,9 @@
 /docs/Manifest.toml
 
 docs/build
+
+# Claude Code agent config/state, not project docs
+/.claude/
+/.mcp.json
+/docs/model-routing.json
+/docs/superpowers/
