@@ -2,7 +2,7 @@ using ScatteredInterpolation, Test, LinearAlgebra, LinearSolve, IterativeSolvers
 
 # Import metrics explicitly: `using Distances` would also bring in `Distances.evaluate`,
 # which clashes with `ScatteredInterpolation.evaluate` and shadows it out of scope.
-using Distances: Cityblock, Euclidean
+using Distances: Cityblock, Euclidean, Haversine
 
 # Deterministic, RNG-free perturbation used by the interpolation tests. Using a fixed
 # pattern instead of `randn` keeps the "evaluate near a sample point" checks reproducible

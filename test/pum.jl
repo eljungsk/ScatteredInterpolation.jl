@@ -172,7 +172,7 @@ end
 
     @testset "Exactness with kernel $(typeof(kernel))" for kernel in (
             Gaussian(2), InverseMultiquadratic(2),
-            GeneralizedMultiquadratic(1, 1/2, 2), Wendland(2, 1))
+            GeneralizedMultiquadratic(1, 1/2, 2), Wendland(2, 1; ε = 1))
         pts = kroneckerpoints(2, 300)
         vals = [prod(sinpi, x) for x in eachcol(pts)]
         itp = interpolate(PartitionOfUnity(kernel; pointsperpatch = 60), pts, vals)

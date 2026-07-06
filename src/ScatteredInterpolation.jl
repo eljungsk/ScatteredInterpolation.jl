@@ -2,6 +2,7 @@ module ScatteredInterpolation
 
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
 using OhMyThreads: tmap, index_chunks
+using Statistics: median
 import KernelFunctions
 
 export interpolate,
