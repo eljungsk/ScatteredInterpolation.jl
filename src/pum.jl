@@ -78,22 +78,27 @@ end
 function assignpatches(points::Matrix{T}, grid::PatchGrid{T, D},
                        tree = KDTree(points)) where {T, D}
     cells = CartesianIndices(grid.ncells)
+    ncell = length(cells)
 
-    patchpoints = Vector{Vector{Int}}()
-    centerlist = Vector{NTuple{D, T}}()
-    for ci in cells
+    # All cell centers in one D × ncell matrix so the range queries can be batched
+    # and chunked across threads (tmap: each task returns its own chunk's lists, no
+    # shared writes).
+    allcenters = Matrix{T}(undef, D, ncell)
+    for (k, ci) in enumerate(cells)
         c = centerof(grid, ci)
-        idxs = inrange(tree, collect(c), grid.radius)
-        isempty(idxs) && continue   # empty patches are dropped
-        push!(patchpoints, sort!(idxs))
-        push!(centerlist, c)
+        for i in 1:D
+            allcenters[i, k] = c[i]
+        end
     end
+    chunks = index_chunks(1:ncell; n = 8 * Threads.nthreads())
+    parts = tmap(chunks) do rng
+        inrange(tree, allcenters[:, rng], grid.radius)
+    end
+    idxlists = reduce(vcat, parts)
 
-    P = length(patchpoints)
-    centers = Matrix{T}(undef, D, P)
-    for p in 1:P, i in 1:D
-        centers[i, p] = centerlist[p][i]
-    end
+    keep = findall(!isempty, idxlists)   # empty patches are dropped
+    patchpoints = [sort!(idxlists[k]) for k in keep]
+    centers = allcenters[:, keep]
 
     patchpoints, centers
 end
