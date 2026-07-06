@@ -820,6 +820,27 @@ git commit -m "Record target-scale benchmark results for perf improvements"
 
 (Appended by Tasks 1 and 7.)
 
+### Task 7 final (all fixes applied)
+| metric | baseline (Task 1 / review) | measured | budget | met |
+|---|---|---|---|---|
+| 3D build | 0.405 / 0.399 s | 0.35 s | ≤ 0.16 s | NO |
+| 3D evaluate | 0.157 / 0.145 s | 0.141 s (min 0.114, GC-clean 0.109) | ≤ 0.10 s | NO |
+| 6D build | — / 8.34 s | 4.316 s | ≤ 5.0 s | YES |
+| 6D evaluate | — / 3.27 s | 2.338 s | ≤ 2.1 s | NO |
+
+**Miss attribution (no ad-hoc tuning performed, per acceptance criteria):**
+The budgets were derived from the review's prototype timings, which were single
+`@timed` samples that happened to land GC-free; the medians measured here include
+GC pauses. The code changes themselves landed exactly as prototyped — the build
+allocates 610 MiB and evaluate 292 MiB, byte-matching the prototype measurements,
+and phase checks confirm the new paths are active (solve loop 0.152 s / 564 MiB,
+assignpatches 17-33 ms). Real medians improved: 3D build 0.405 → 0.35 s, 3D eval
+0.157 → 0.141 s (median; GC-clean run 0.109 s), 6D build 8.34 → 4.32 s, 6D eval
+3.27 → 2.34 s. The remaining gap is GC share (18-21 % of both hot paths), which
+is exactly the territory of the descoped Finding 1 step 3 (per-task `@local`
+kernel-matrix buffers bypassing LinearSolve) — rejected during design to keep a
+single solve path. Decision needed: accept these numbers, or revisit that step.
+
 ### Task 1 baseline (this machine)
 - 3D build: 0.405 s (review: 0.399 s)
 - 3D evaluate: 0.157 s (review: 0.145 s)
