@@ -88,9 +88,11 @@ csrbfKernel = Wendland(2, 1; ε = 4.0)   # support radius 0.25 ⇒ genuinely spa
         @test evaluate(itpS, grid) ≈ evaluate(itpD, grid) atol = 1e-8
 
         # :auto — big n, small support ⇒ sparse; small n ⇒ dense; huge support ⇒ dense.
-        @test interpolate(w4, bigPoints, bigData) isa
+        # ε = 8 gives ~5% fill at n = 600, well under the calibrated SPARSE_MAX_FILL.
+        w8 = Wendland(2, 1; ε = 8.0)
+        @test interpolate(w8, bigPoints, bigData) isa
             ScatteredInterpolation.CompactSupportRBFInterpolant
-        @test interpolate(w4, csrbfPoints, csrbfData) isa
+        @test interpolate(w8, csrbfPoints, csrbfData) isa
             ScatteredInterpolation.RBFInterpolant
         @test interpolate(Wendland(2, 1; ε = 0.1), bigPoints, bigData) isa
             ScatteredInterpolation.RBFInterpolant   # support radius 10 ⇒ full matrix

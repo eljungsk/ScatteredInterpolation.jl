@@ -6,14 +6,14 @@
 
 export CompactSupportRBFInterpolant
 
-# Routing thresholds for the `sparse = :auto` decision in `interpolate` (rbf.jl):
-# below SPARSE_MIN_POINTS the dense path is cheap enough that assembling and
-# factorizing a sparse matrix is not worth it; above it, a sampled fill estimate
-# (fraction of nonzero entries, from FILL_SAMPLE_SIZE probe points) above
-# SPARSE_MAX_FILL means the support radius is wide enough that the matrix is nearly
-# dense anyway, so the dense path is used instead.
+# Routing thresholds for the `sparse = :auto` decision in `interpolate` (rbf.jl).
+# Calibrated on d = 2 golden-ratio lattice, 2026-07-06:
+#   n-crossover: sparse wins at all n ≥ 500 with low fill (0.005s vs 0.008s at n=500,
+#                43× at n=10000). SPARSE_MIN_POINTS = 500 confirmed.
+#   fill-crossover at n = 10000: sparse wins up to ~6% fill (ε=7, 4.2s vs 9.6s),
+#                loses at ~11% (ε=5, 41s vs 9.7s). SPARSE_MAX_FILL set to 0.07.
 const SPARSE_MIN_POINTS = 500
-const SPARSE_MAX_FILL = 0.25
+const SPARSE_MAX_FILL = 0.07
 const FILL_SAMPLE_SIZE = 32
 
 """
