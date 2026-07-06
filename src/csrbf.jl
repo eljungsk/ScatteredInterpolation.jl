@@ -137,24 +137,25 @@ function assemblesparse(rbf, points::AbstractMatrix{<:Real}, tree, metric, smoot
     r = support_radius(rbf)
     Tv = typeof(rbf(zero(float(eltype(points)))))
 
-    Is = Int[]
-    Js = Int[]
-    Vs = Tv[]
-
-    for i in 1:n
-        xi = view(points, :, i)
-        for j in inrange(tree, xi, r)
-            v = rbf(metric(xi, view(points, :, j)))
-            if j == i && smooth !== false
-                v += smoothvalue(smooth, i)
+    chunks = index_chunks(1:n; n = 8 * Threads.nthreads())
+    parts = tmap(chunks) do rng
+        Is = Int[]; Js = Int[]; Vs = Tv[]
+        for i in rng
+            xi = view(points, :, i)
+            for j in inrange(tree, xi, r)
+                v = rbf(metric(xi, view(points, :, j)))
+                if j == i && smooth !== false
+                    v += smoothvalue(smooth, i)
+                end
+                push!(Is, i); push!(Js, j); push!(Vs, v)
             end
-            push!(Is, i)
-            push!(Js, j)
-            push!(Vs, v)
         end
+        (Is, Js, Vs)
     end
 
-    sparse(Is, Js, Vs, n, n)
+    sparse(reduce(vcat, p[1] for p in parts),
+           reduce(vcat, p[2] for p in parts),
+           reduce(vcat, p[3] for p in parts), n, n)
 end
 
 """
@@ -196,14 +197,22 @@ function evaluate(itp::CompactSupportRBFInterpolant, points::AbstractArray{<:Rea
     m = size(points, 2)
     r = support_radius(itp.rbf)
     Tv = typeof(itp.rbf(zero(float(eltype(points)))))
-    Is = Int[]; Js = Int[]; Vs = Tv[]
-    for q in 1:m
-        xq = view(points, :, q)
-        for j in inrange(itp.tree, xq, r)
-            push!(Is, q); push!(Js, j)
-            push!(Vs, itp.rbf(itp.metric(xq, view(itp.points, :, j))))
+
+    chunks = index_chunks(1:m; n = 8 * Threads.nthreads())
+    parts = tmap(chunks) do rng
+        Is = Int[]; Js = Int[]; Vs = Tv[]
+        for q in rng
+            xq = view(points, :, q)
+            for j in inrange(itp.tree, xq, r)
+                push!(Is, q); push!(Js, j)
+                push!(Vs, itp.rbf(itp.metric(xq, view(itp.points, :, j))))
+            end
         end
+        (Is, Js, Vs)
     end
-    Φ = sparse(Is, Js, Vs, m, n)
+
+    Φ = sparse(reduce(vcat, p[1] for p in parts),
+               reduce(vcat, p[2] for p in parts),
+               reduce(vcat, p[3] for p in parts), m, n)
     Φ * itp.w
 end
