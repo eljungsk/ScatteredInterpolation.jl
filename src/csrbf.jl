@@ -6,6 +6,16 @@
 
 export CompactSupportRBFInterpolant
 
+# Routing thresholds for the `sparse = :auto` decision in `interpolate` (rbf.jl):
+# below SPARSE_MIN_POINTS the dense path is cheap enough that assembling and
+# factorizing a sparse matrix is not worth it; above it, a sampled fill estimate
+# (fraction of nonzero entries, from FILL_SAMPLE_SIZE probe points) above
+# SPARSE_MAX_FILL means the support radius is wide enough that the matrix is nearly
+# dense anyway, so the dense path is used instead.
+const SPARSE_MIN_POINTS = 500
+const SPARSE_MAX_FILL = 0.25
+const FILL_SAMPLE_SIZE = 32
+
 """
     CompactSupportRBFInterpolant
 
@@ -27,6 +37,90 @@ end
 # gives one value per point. Mirrors addSmoothing!'s dispatch in rbf.jl.
 smoothvalue(smooth::Number, i) = smooth
 smoothvalue(smooth::AbstractVector, i) = smooth[i]
+
+"""
+    decidesparse(sparse, rbf, points, metric, tree)
+
+Resolve the `sparse` kwarg of `interpolate` (`:auto`, `true` or `false`) into a
+concrete `(usesparse::Bool, tree)` decision. `tree` is the `KDTree` built by
+`resolveshape` when a Wendland ε needed resolving, or `nothing`; it is built here
+(and returned for reuse by the caller) only when actually needed for the decision or
+the subsequent sparse assembly.
+
+`sparse = true` throws an `ArgumentError` (via [`sparseineligibility`](@ref)) when the
+kernel or metric makes a sparse solve impossible. `sparse = :auto` falls back to the
+dense path instead of throwing, and additionally requires at least
+`SPARSE_MIN_POINTS` points and an estimated matrix fill (via
+[`estimatefill`](@ref)) below `SPARSE_MAX_FILL`.
+"""
+function decidesparse(sparse, rbf, points, metric, tree)
+    sparse === false && return (false, tree)
+    sparse === true || sparse === :auto || throw(ArgumentError(
+        "sparse must be :auto, true or false, got $(repr(sparse))"))
+
+    reason = sparseineligibility(rbf, metric)
+    if sparse === true
+        reason === nothing || throw(ArgumentError(reason))
+    else
+        reason === nothing || return (false, tree)
+        size(points, 2) >= SPARSE_MIN_POINTS || return (false, tree)
+    end
+
+    tree = tree === nothing ? KDTree(points, metric) : tree
+    if sparse === :auto &&
+       estimatefill(tree, points, support_radius(rbf)) > SPARSE_MAX_FILL
+        return (false, tree)
+    end
+    (true, tree)
+end
+
+"""
+    sparseineligibility(rbf, metric)
+
+Return a human-readable reason `String` why `rbf`/`metric` cannot go through the
+sparse interpolation path, or `nothing` if they can. Used by
+[`decidesparse`](@ref).
+"""
+function sparseineligibility(rbf, metric)
+    if rbf isa AbstractVector
+        return "sparse interpolation does not support a vector of per-point " *
+               "kernels: there is no single support radius"
+    elseif rbf isa GeneralizedRadialBasisFunction
+        return "sparse interpolation does not support generalized " *
+               "(polynomial-augmented) RBFs: the augmented system is not sparse " *
+               "positive definite"
+    elseif !isfinite(support_radius(rbf))
+        return "$(nameof(typeof(rbf))) is globally supported (nonzero at every " *
+               "distance), so its interpolation matrix has no zero entries and " *
+               "cannot be sparse. Use a compactly supported kernel (Wendland) for " *
+               "a sparse global solve, or PartitionOfUnity for locality with " *
+               "this kernel"
+    elseif !(metric isa Distances.MinkowskiMetric)
+        return "sparse interpolation requires a Minkowski-family metric " *
+               "(Euclidean, Cityblock, Chebyshev or Minkowski) for the KDTree " *
+               "range search, got $(nameof(typeof(metric)))"
+    end
+    nothing
+end
+
+"""
+    estimatefill(tree, points, r)
+
+Estimate the fraction of nonzero entries the sparse RBF matrix would have, by
+sampling up to `FILL_SAMPLE_SIZE` points and averaging the fraction of `points` that
+fall within radius `r` of each (via a KDTree range query over `tree`). Used by
+[`decidesparse`](@ref) to fall back to the dense path when the support radius is wide
+enough that the matrix would be nearly dense anyway.
+"""
+function estimatefill(tree, points, r)
+    n = size(points, 2)
+    sample = round.(Int, range(1, n; length = min(n, FILL_SAMPLE_SIZE)))
+    total = 0
+    for i in sample
+        total += length(inrange(tree, view(points, :, i), r))
+    end
+    total / (length(sample) * n)
+end
 
 """
     assemblesparse(rbf, points, tree, metric, smooth)
