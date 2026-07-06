@@ -3,6 +3,7 @@ using ScatteredInterpolation, Test, LinearAlgebra, LinearSolve, IterativeSolvers
 # Import metrics explicitly: `using Distances` would also bring in `Distances.evaluate`,
 # which clashes with `ScatteredInterpolation.evaluate` and shadows it out of scope.
 using Distances: Cityblock, Euclidean, Haversine
+import Distances
 
 # Deterministic, RNG-free perturbation used by the interpolation tests. Using a fixed
 # pattern instead of `randn` keeps the "evaluate near a sample point" checks reproducible
@@ -16,6 +17,7 @@ perturbation(sz; scale = 5e-4) = reshape([scale * sinpi((2i + 1) / 7) for i in 1
     include("idw.jl")
     include("nearestNeighbor.jl")
     include("wendland.jl")
+    include("csrbf.jl")
     include("rippa.jl")
     include("pum.jl")
 end

@@ -3,6 +3,8 @@ module ScatteredInterpolation
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
 using OhMyThreads: tmap, index_chunks
 using Statistics: median
+using SparseArrays: sparse, SparseMatrixCSC, nnz
+import SparseArrays
 import KernelFunctions
 
 export interpolate,
@@ -14,6 +16,7 @@ abstract type InterpolationMethod end
 include("./rbf.jl")
 include("./rippa.jl")
 include("./wendland.jl")
+include("./csrbf.jl")
 include("./pum.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
