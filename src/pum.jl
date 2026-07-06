@@ -180,6 +180,8 @@ mutable struct PartitionOfUnityInterpolant{T <: AbstractFloat, D, S <: AbstractA
     weight::W
     points::Matrix{T}
     samples::S
+    lo::Vector{T}               # data bounding box, fixed at build time —
+    hi::Vector{T}               # addpoints! validates against it without a scan
     method::PU
     smooth::SM                  # stored so addpoints! re-solves match the build
     linsolve::LS
@@ -455,8 +457,9 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     locals = [l for l in solved]
 
     PartitionOfUnityInterpolant(grid, patchpoints, locals, centers, KDTree(centers),
-                                weight, pts, collect(samples), pum,
-                                smooth, linsolve, metric)
+                                weight, pts, collect(samples),
+                                vec(minimum(pts, dims = 2)), vec(maximum(pts, dims = 2)),
+                                pum, smooth, linsolve, metric)
 end
 
 function evaluate(itp::PartitionOfUnityInterpolant{T, D},
@@ -605,11 +608,12 @@ function addpoints!(itp::PartitionOfUnityInterpolant{T, D},
     nnew = size(newpts, 2)
 
     # The patch grid is fixed at build time: reject points outside the bounding box
-    # of the data. The box is computed from the stored points rather than from the
-    # grid, whose flat dimensions carry an artificial unit spacing that would
-    # otherwise admit off-plane points.
-    lo = vec(minimum(itp.points, dims = 2))
-    hi = vec(maximum(itp.points, dims = 2))
+    # of the original data, stored on the interpolant at build time (computed from
+    # the points rather than from the grid, whose flat dimensions carry an
+    # artificial unit spacing that would otherwise admit off-plane points). The box
+    # never widens: accepted points lie inside it by definition.
+    lo = itp.lo
+    hi = itp.hi
     for q in 1:nnew, i in 1:D
         lo[i] <= newpts[i, q] <= hi[i] || throw(ArgumentError(
             "new point $q lies outside the bounding box of the original data; the " *
@@ -638,17 +642,19 @@ function addpoints!(itp::PartitionOfUnityInterpolant{T, D},
         push!(affected, p)
     end
 
-    # Re-solve only the affected local systems (threaded and BLAS-pinned, like the
-    # build).
+    # Re-solve only the affected local systems (tmap, BLAS-pinned, like the build);
+    # each task returns its solve, written back by index afterwards.
     aff = collect(affected)
-    withpinnedblas() do
-        Threads.@threads for k in eachindex(aff)
-            p = aff[k]
+    solved = withpinnedblas() do
+        tmap(aff) do p
             idxs = itp.patchpoints[p]
-            itp.locals[p] = solvelocal(itp.method, itp.points[:, idxs],
-                                       patchsamples(itp.samples, idxs),
-                                       itp.smooth, itp.metric, itp.linsolve)
+            solvelocal(itp.method, itp.points[:, idxs],
+                       patchsamples(itp.samples, idxs),
+                       itp.smooth, itp.metric, itp.linsolve)
         end
+    end
+    for (k, p) in enumerate(aff)
+        itp.locals[p] = solved[k]
     end
 
     itp
