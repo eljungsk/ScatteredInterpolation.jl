@@ -841,6 +841,9 @@ is exactly the territory of the descoped Finding 1 step 3 (per-task `@local`
 kernel-matrix buffers bypassing LinearSolve) — rejected during design to keep a
 single solve path. Decision needed: accept these numbers, or revisit that step.
 
+**Decision (2026-07-06):** User accepted the measured numbers as-is; the per-task
+buffer fast path stays descoped. Plan closed with all seven tasks completed.
+
 ### Task 1 baseline (this machine)
 - 3D build: 0.405 s (review: 0.399 s)
 - 3D evaluate: 0.157 s (review: 0.145 s)
