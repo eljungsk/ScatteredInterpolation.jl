@@ -200,6 +200,30 @@ performance note above before enabling this by default):
 itp = interpolate(PartitionOfUnity(Gaussian(2); tune = :loocv), points, samples)
 ```
 
+### Choosing a linear solver
+
+Fitting the RBF weights requires solving a linear system ``\mathbf{A}\mathbf{w} =
+\mathbf{s}`` (or, for `GeneralizedRadialBasisFunction`, the blocked system that also
+determines the polynomial coefficients ``\mathbf{\lambda}``). This solve is performed
+through [LinearSolve.jl](https://docs.sciml.ai/LinearSolve/stable/), and the algorithm
+can be selected with the `linsolve` keyword to `interpolate`:
+
+```julia
+using LinearSolve
+
+itp = interpolate(rbf, points, samples; linsolve = LUFactorization())
+```
+
+`linsolve = nothing` (the default) lets LinearSolve.jl pick an algorithm based on the
+matrix type. Any concrete algorithm from LinearSolve.jl's
+[solver list](https://docs.sciml.ai/LinearSolve/stable/solvers/solvers/) can be passed,
+e.g. `QRFactorization()` for a more numerically robust (but slower) solve of an
+ill-conditioned system, or `KrylovJL_GMRES()` for large, sparse, or matrix-free problems.
+
+The chosen algorithm is reused across every right-hand side needed for a given
+`interpolate` call (multiple sample columns, and, for generalized RBFs, the polynomial
+and Schur-complement solves), so the factorization is only computed once per matrix.
+
 ## Inverse Distance Weighting
 Also called Shepard interpolation, the basic version computes the interpolated value at
 some point ``\mathbf{x}`` by
