@@ -84,7 +84,32 @@ function interpolatecsrbf(rbf, points, samples, tree, metric, smooth, linsolve,
     returnRBFmatrix ? (itp, A) : itp
 end
 
-# NOTE: `evaluate` for `CompactSupportRBFInterpolant` is intentionally not defined here.
-# A correct implementation needs the same tree-based range-query sparsity as
-# `assemblesparse` (a dense `pairwise` evaluate would defeat the point of this whole
-# module); that is left to a follow-up task alongside its own tests.
+"""
+    evaluate(itp::CompactSupportRBFInterpolant, points)
+
+Evaluate the interpolant at `points` (dimension × number of query points). For each
+query point, a KDTree range query over `itp.tree` (radius `support_radius(itp.rbf)`)
+finds the training points that can contribute; only those pairs are evaluated and
+assembled into a sparse Φ, so points with no in-range neighbors evaluate to exactly
+zero rather than requiring a dense pairwise distance matrix.
+"""
+function evaluate(itp::CompactSupportRBFInterpolant, points::AbstractArray{<:Real, 2})
+    size(points, 1) == size(itp.points, 1) || throw(DimensionMismatch(
+        "query points have dimension $(size(points, 1)) but the interpolant was " *
+        "built for dimension $(size(itp.points, 1))"))
+
+    n = size(itp.points, 2)
+    m = size(points, 2)
+    r = support_radius(itp.rbf)
+    Tv = typeof(itp.rbf(zero(float(eltype(points)))))
+    Is = Int[]; Js = Int[]; Vs = Tv[]
+    for q in 1:m
+        xq = view(points, :, q)
+        for j in inrange(itp.tree, xq, r)
+            push!(Is, q); push!(Js, j)
+            push!(Vs, itp.rbf(itp.metric(xq, view(itp.points, :, j))))
+        end
+    end
+    Φ = sparse(Is, Js, Vs, m, n)
+    Φ * itp.w
+end

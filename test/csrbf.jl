@@ -48,4 +48,28 @@ csrbfKernel = Wendland(2, 1; ε = 4.0)   # support radius 0.25 ⇒ genuinely spa
             csrbfKernel, csrbfPoints, multi, tree, Euclidean(), false, nothing, false)
         @test itpm.w[:, 2] ≈ 2 .* itpm.w[:, 1] atol = 1e-8
     end
+
+    @testset "Neighbor-only evaluation" begin
+        tree = ScatteredInterpolation.NearestNeighbors.KDTree(csrbfPoints, Euclidean())
+        itp = ScatteredInterpolation.interpolatecsrbf(
+            csrbfKernel, csrbfPoints, csrbfData, tree, Euclidean(), false, nothing, false)
+
+        # Exact at the data points.
+        @test evaluate(itp, csrbfPoints) ≈ csrbfData atol = 1e-8
+
+        # Matches the dense path on an off-node query grid.
+        dense = interpolate(csrbfKernel, csrbfPoints, csrbfData)
+        grid = permutedims(reduce(vcat, [x y] for x in 0.05:0.1:0.95, y in 0.05:0.1:0.95))
+        @test evaluate(itp, grid) ≈ evaluate(dense, grid) atol = 1e-8
+
+        # Identically zero outside every kernel's support (radius 0.25, data in the
+        # unit square, query at distance > 1 from the square).
+        @test all(iszero, evaluate(itp, reshape([5.0, 5.0], 2, 1)))
+
+        # Vector query goes through the generic reshape fallback.
+        @test evaluate(itp, [0.5, 0.5]) ≈ evaluate(dense, [0.5, 0.5]) atol = 1e-8
+
+        # Wrong dimension errors.
+        @test_throws DimensionMismatch evaluate(itp, reshape([0.5], 1, 1))
+    end
 end
