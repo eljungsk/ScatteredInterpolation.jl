@@ -218,7 +218,7 @@ itp = interpolate(rbf, points, samples; linsolve = LUFactorization())
 matrix type. Any concrete algorithm from LinearSolve.jl's
 [solver list](https://docs.sciml.ai/LinearSolve/stable/solvers/solvers/) can be passed,
 e.g. `QRFactorization()` for a more numerically robust (but slower) solve of an
-ill-conditioned system, or `KrylovJL_GMRES()` for large, sparse, or matrix-free problems.
+ill-conditioned system, or `KrylovJL_GMRES()` for large, sparse problems.
 
 The chosen algorithm is reused across every right-hand side needed for a given
 `interpolate` call (multiple sample columns, and, for generalized RBFs, the polynomial
@@ -290,7 +290,7 @@ The default solver for the sparse path is `CHOLMODFactorization()` from
 [LinearSolve.jl](https://docs.sciml.ai/LinearSolve/stable/), which exploits the
 symmetric positive definite structure of the Wendland interpolation matrix. As with
 the dense path, this can be overridden with the `linsolve` keyword, e.g.
-`linsolve = KrylovJL_CG()` for a matrix-free iterative solve on very large problems:
+`linsolve = KrylovJL_CG()` for an iterative solve on very large problems:
 
 ```julia
 using LinearSolve
