@@ -2,6 +2,9 @@ module ScatteredInterpolation
 
 using Distances, NearestNeighbors, Combinatorics, LinearAlgebra, LinearSolve
 using OhMyThreads: tmap, index_chunks
+using Statistics: median
+using SparseArrays: sparse, SparseMatrixCSC, nnz
+import SparseArrays
 import KernelFunctions
 
 export interpolate,
@@ -13,6 +16,7 @@ abstract type InterpolationMethod end
 include("./rbf.jl")
 include("./rippa.jl")
 include("./wendland.jl")
+include("./csrbf.jl")
 include("./pum.jl")
 include("./idw.jl")
 include("./nearestNeighbor.jl")
@@ -29,7 +33,7 @@ function evaluate(itp::ScatteredInterpolant, points::AbstractArray{<:Real, 1})
 end
 
 """
-    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false, smooth = false, linsolve = nothing)
+    interpolate(method, points, samples; metric = Euclidean(), returnRBFmatrix = false, smooth = false, linsolve = nothing, sparse = :auto, neighbors = 50)
 
 Create an interpolation of the data in `samples` sampled at the locations defined in
 `points` based on the interpolation method `method`. `metric` is any of the metrics defined
@@ -56,6 +60,18 @@ values. Note that it is no longer interpolating when using smoothing.
 
 The returned `ScatteredInterpolant` object can be passed to `evaluate` to interpolate the
 data to new points.
+
+For compactly supported basis functions (`Wendland`), `sparse` controls a sparse
+interpolation path that assembles only the nonzero entries of the RBF matrix and
+solves with sparse Cholesky (`CHOLMODFactorization`): `:auto` (default) uses it when
+the problem is large and the matrix sufficiently sparse, `true` forces it (erroring
+if the kernel or metric makes sparsity impossible), `false` always uses the dense
+path. Globally supported kernels (Gaussian, Multiquadratic, …) are nonzero at every
+distance and can never be sparse — use `PartitionOfUnity` for locality with those.
+
+A `Wendland` kernel constructed without `ε` gets its support radius from the data:
+`1/ε` is set to the median distance to the `neighbors`-th nearest neighbor. An
+explicit `ε` always wins, in which case `neighbors` is ignored.
 """
 function interpolate end
 

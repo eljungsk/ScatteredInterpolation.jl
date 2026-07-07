@@ -230,10 +230,20 @@ function interpolate(rbf::Union{T, AbstractVector{T}} where T <: AbstractRadialB
                      samples::AbstractArray{<:Number,N};
                      metric = Euclidean(), returnRBFmatrix::Bool = false,
                      smooth::Union{S, AbstractVector{S}} = false,
-                     linsolve = nothing) where {N} where {S<:Number}
+                     linsolve = nothing,
+                     sparse = :auto,
+                     neighbors::Integer = 50) where {N} where {S<:Number}
 
-    #hinder smooth from being set to true and interpreted as the value 1 
+    #hinder smooth from being set to true and interpreted as the value 1
     @assert smooth != true "set the smoothing value as a number or vector of numbers"
+
+    rbf, tree = resolveshape(rbf, points, metric, neighbors)
+
+    usesparse, tree = decidesparse(sparse, rbf, points, metric, tree)
+    if usesparse
+        return interpolatecsrbf(rbf, points, samples, tree, metric, smooth,
+                                linsolve, returnRBFmatrix)
+    end
 
     # Compute pairwise distances, apply the Radial Basis Function
     # and optional smoothing (ridge regression)

@@ -426,7 +426,7 @@ function interpolate(pum::PartitionOfUnity, points::AbstractArray{<:Real, 2},
     grid = buildgrid(pts, pum.pointsperpatch, pum.overlap)
     tree = KDTree(pts)
     patchpoints, centers = assignpatches(pts, grid, tree)
-    weight = pum.weight === nothing ? Wendland(d, 1) : pum.weight
+    weight = pum.weight === nothing ? Wendland(d, 1; ε = 1) : pum.weight
 
     # Patches near the boundary of the data can end up with few, one-sided points
     # (their ball sticks out of the data region), and a starved local interpolant

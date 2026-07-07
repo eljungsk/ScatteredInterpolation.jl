@@ -218,11 +218,85 @@ itp = interpolate(rbf, points, samples; linsolve = LUFactorization())
 matrix type. Any concrete algorithm from LinearSolve.jl's
 [solver list](https://docs.sciml.ai/LinearSolve/stable/solvers/solvers/) can be passed,
 e.g. `QRFactorization()` for a more numerically robust (but slower) solve of an
-ill-conditioned system, or `KrylovJL_GMRES()` for large, sparse, or matrix-free problems.
+ill-conditioned system, or `KrylovJL_GMRES()` for large, sparse problems.
 
 The chosen algorithm is reused across every right-hand side needed for a given
 `interpolate` call (multiple sample columns, and, for generalized RBFs, the polynomial
 and Schur-complement solves), so the factorization is only computed once per matrix.
+
+## Compactly supported RBFs and the sparse path
+
+Every basis function above is evaluated at every pairwise distance, so the RBF
+interpolation matrix is dense in general. [`Wendland`](@ref) is the exception: it is a
+*compactly supported* kernel, identically zero beyond its support radius, and
+`interpolate` can exploit that to build and factorize a sparse matrix instead of a
+dense one.
+
+| Kernel | Support | `sparse` eligible |
+|--------|---------|-------------------|
+| [`Wendland`](@ref) | Compact: zero for ``r > 1/\varepsilon`` | Yes |
+| [`Gaussian`](@ref), [`Multiquadratic`](@ref), [`InverseQuadratic`](@ref), [`InverseMultiquadratic`](@ref), [`Polyharmonic`](@ref)/[`ThinPlate`](@ref), [`GeneralizedMultiquadratic`](@ref), [`GeneralizedPolyharmonic`](@ref) | Global: nonzero at all distances | No |
+
+A globally supported kernel is nonzero at every distance — its interpolation matrix
+has no zero entries, so `sparse` is mathematically meaningless for it, and
+`sparse = true` throws an error. For local behavior with globally supported kernels,
+use [`PartitionOfUnity`](@ref) instead.
+
+### Support radius and `ε`
+
+A Wendland kernel's shape parameter `ε` sets its support radius directly:
+```math
+ϕ(r) = 0 \quad \text{for} \quad r > 1/\varepsilon
+```
+so a larger `ε` means a smaller support radius, and vice versa.
+
+`ε` can also be left unset on construction (`Wendland(dim, degree)`, with no `ε`).
+In that case `interpolate` calibrates it from the training data: `1/ε` is set to the
+median distance to the `neighbors`-th nearest neighbor, sampled over a subset of the
+training points. Passing `ε` explicitly always takes precedence, in which case
+`neighbors` is ignored.
+
+This `neighbors` resolves something different from SciPy's `neighbors` keyword.
+SciPy's `RBFInterpolator(neighbors=k)` solves a small local system per query point —
+an approximation to the full interpolant. Here, `neighbors` only calibrates the
+cutoff radius of the kernel used in one exact global system; it never changes what
+is being solved. For the local-system approach analogous to SciPy's `neighbors`, use
+[`PartitionOfUnity`](@ref).
+
+### Sparsity, accuracy and conditioning
+
+A small support radius (large `ε`) produces a sparser, faster-to-factorize system,
+but sacrifices accuracy: data points outside each other's support do not interact at
+all, so the interpolant can only capture behavior at the scale of `1/ε`. A large
+support (small `ε`) gives accuracy approaching a dense global solve but loses the
+sparsity benefit — and, as with any RBF, a support radius (or `ε`) chosen badly
+relative to the point spacing can also leave the system ill-conditioned. For very
+large datasets where even a sparse global system is too expensive,
+[`PartitionOfUnity`](@ref) remains the primary method.
+
+Query points that fall outside the support of every training point evaluate to
+exactly zero. This is the mathematically correct value of the interpolant there, not
+an approximation or a missing-data placeholder.
+
+### Choosing `sparse` and the linear solver
+
+`sparse` (default `:auto`) controls whether `interpolate` takes the sparse path:
+`:auto` uses it when the problem is large and the resulting matrix sufficiently
+sparse, `true` forces it (throwing if the kernel or metric makes sparsity
+impossible, e.g. a globally supported kernel), and `false` always uses the dense
+path.
+
+The default solver for the sparse path is `CHOLMODFactorization()` from
+[LinearSolve.jl](https://docs.sciml.ai/LinearSolve/stable/), which exploits the
+symmetric positive definite structure of the Wendland interpolation matrix. As with
+the dense path, this can be overridden with the `linsolve` keyword, e.g.
+`linsolve = KrylovJL_CG()` for an iterative solve on very large problems:
+
+```julia
+using LinearSolve
+
+itp = interpolate(Wendland(3, 1), points, samples; linsolve = KrylovJL_CG())
+```
 
 ## Inverse Distance Weighting
 Also called Shepard interpolation, the basic version computes the interpolated value at
